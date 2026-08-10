@@ -198,6 +198,15 @@ class RotorAnalysisOutputs(csdl.VariableGroup):
         by default None
     sectional_inflow_angle : csdl.Variable, optional
         Sectional inflow angle (if available), by default None
+    sectional_lift_coefficient : csdl.Variable, optional
+        Sectional lift coefficient Cl (if available -- BEMModel populates
+        this; Pitt-Peters/Peters-He do not, by default None). SPL patch,
+        2026-08-10: added to expose BEM's already-in-graph Cl for use as an
+        AD-compatible optimization constraint (e.g. max sectional Cl), which
+        was computed internally but not returned upstream.
+    sectional_drag_coefficient : csdl.Variable, optional
+        Sectional drag coefficient Cd (if available), by default None. Same
+        SPL patch as sectional_lift_coefficient.
     """
 
     axial_induced_velocity: csdl.Variable
@@ -217,5 +226,7 @@ class RotorAnalysisOutputs(csdl.VariableGroup):
     forces: csdl.Variable = None
     moments: csdl.Variable = None
     sectional_inflow_angle = None
+    sectional_lift_coefficient: csdl.Variable = None
+    sectional_drag_coefficient: csdl.Variable = None
     
 

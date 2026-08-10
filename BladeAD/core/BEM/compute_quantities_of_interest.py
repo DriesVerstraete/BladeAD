@@ -106,6 +106,14 @@ def compute_quantities_of_interest(
 
     bem_outputs.advance_ratio = J
 
+    # SPL patch, 2026-08-10: expose the already-in-graph sectional Cl/Cd as
+    # real outputs -- both were computed above (used to build Cx/Ct) but
+    # never attached to bem_outputs upstream. Needed as an AD-compatible
+    # optimization constraint (e.g. max sectional Cl); no new computation,
+    # same csdl.Variables that already flow through this function.
+    bem_outputs.sectional_lift_coefficient = Cl
+    bem_outputs.sectional_drag_coefficient = Cd
+
     return bem_outputs
 
 

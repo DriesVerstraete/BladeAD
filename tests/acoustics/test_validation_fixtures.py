@@ -5,6 +5,7 @@ import numpy as np
 
 
 FIXTURES = Path(__file__).resolve().parents[2] / "validation" / "acoustics" / "fixtures"
+REPORTS = FIXTURES.parent / "reports"
 
 
 def read_csv(case, filename):
@@ -71,3 +72,18 @@ def test_rcaide_baseline_archives_are_complete_and_pinned():
             assert spectrum.shape == spectrum_shape
             assert np.isfinite(spectrum).all()
             assert len(baseline.files) >= 280
+
+
+def test_validation_matrix_is_frozen_and_complete():
+    with (REPORTS / "rcaide_vs_experiment_summary.csv").open(newline="") as stream:
+        summary = list(csv.DictReader(stream))
+    with (REPORTS / "rcaide_vs_experiment_detailed.csv").open(newline="") as stream:
+        detail = list(csv.DictReader(stream))
+
+    assert len(summary) == 17
+    assert len(detail) == 321
+    first = summary[0]
+    assert first["case"] == "F8745-D4-1"
+    assert first["model"] == "rcaide_line_source"
+    np.testing.assert_allclose(float(first["mean_absolute_error_db"]), 1.309866604925333)
+    assert "must not be relaxed" in (REPORTS / "validation_matrix.md").read_text()

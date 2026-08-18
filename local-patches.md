@@ -16,6 +16,9 @@ RCAIDE predictions are required to remain separate. Added reproducible extractio
 tests for F8745-D4 and APC 11x4 geometry, conditions, observers, experimental spectra, and pinned
 RCAIDE source-tool baselines. Baseline archives preserve complete serializable numeric containers,
 manifests, data dictionaries, runtime/source metadata, and the required NumPy compatibility alias.
+Added a reproducible RCAIDE-versus-experiment validation matrix with detailed signed errors and
+acceptance criteria frozen before BladeAD acoustic-model predictions. Added a source-grounded
+audit of BEM sectional-load, radial, azimuthal, integration, and frame conventions.
 
 **Why:** keep the validation evidence beside the reusable acoustic implementation and tests so a
 fresh checkout can locate and reproduce the model's evidence without project-local knowledge.

@@ -6,6 +6,19 @@ branch). This file logs every local modification, matching the pattern used for 
 (`999-software/rcaide/local-patches.md`) — check here before diffing against upstream or
 investigating "unexpected" BladeAD behavior.
 
+## 2026-08-18 — Start Lowson with differentiable load harmonics
+
+**Files:** `BladeAD/core/acoustics/tonal/`, `tests/acoustics/test_load_harmonics.py`
+
+**What:** added real-valued azimuthal cosine/sine coefficients for thrust and drag using BladeAD's
+actual azimuth grid. Complete-rotor sectional loads are divided by blade count exactly once.
+
+**Why:** isolate and verify the load convention and Fourier projection before adding Lowson's
+Bessel/directivity pressure terms.
+
+**Verification:** independent NumPy discrete-Fourier comparison plus CSDL derivative verification
+with respect to complete-rotor sectional thrust.
+
 ## 2026-08-18 — Expose BEM mesh/load conventions for Lowson acoustics
 
 **Files:** `BladeAD/core/BEM/`, `BladeAD/core/preprocessing/preprocess_variables.py`,

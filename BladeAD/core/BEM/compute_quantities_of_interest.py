@@ -107,6 +107,16 @@ def compute_quantities_of_interest(
 
     bem_outputs.radial_stations = radius_vector
     bem_outputs.radial_element_width = dr
+    radial_weights = np.ones(shape)
+    if integration_scheme == "trapezoidal":
+        radial_weights[:, 0, :] = 0.5
+        radial_weights[:, -1, :] = 0.5
+    elif integration_scheme == "Simpson":
+        radial_weights[:, 0, :] = 1.0 / 3.0
+        radial_weights[:, -1, :] = 1.0 / 3.0
+        radial_weights[:, 1:-1:2, :] = 4.0 / 3.0
+        radial_weights[:, 2:-1:2, :] = 2.0 / 3.0
+    bem_outputs.radial_integration_weights = csdl.Variable(value=radial_weights)
     bem_outputs.azimuth_angle = azimuth_angle
     bem_outputs.sectional_loads_include_all_blades = True
 
@@ -121,7 +131,6 @@ def compute_quantities_of_interest(
     bem_outputs.sectional_drag_coefficient = Cd
 
     return bem_outputs
-
 
 
 

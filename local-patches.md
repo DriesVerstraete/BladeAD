@@ -6,6 +6,23 @@ branch). This file logs every local modification, matching the pattern used for 
 (`999-software/rcaide/local-patches.md`) — check here before diffing against upstream or
 investigating "unexpected" BladeAD behavior.
 
+## 2026-08-18 — Add differentiable Sears hover-loading harmonics
+
+**Files:** `BladeAD/core/acoustics/tonal/sears.py`, `tests/acoustics/test_sears.py`,
+`BladeAD/core/BEM/compute_quantities_of_interest.py`
+
+**What:** added Sears gust-response load harmonics using the audited 0.06 gust-amplification
+convention, while retaining complete-rotor steady loads and producing per-blade elemental
+coefficients for Lowson equation (10). Exposed and applied BEM's actual radial quadrature weights
+so trapezoidal/Simpson endpoints are not overcounted acoustically.
+
+**Why:** reproduce the hover-loading branch used in the HG case without inheriting its duplicated
+blade axis or mixing force-per-length and elemental-force conventions.
+
+**Verification:** independent SciPy evaluation of all four Sears load coefficients, CSDL derivative
+verification with respect to angular speed, and BEM interface coverage for radial quadrature
+weights.
+
 ## 2026-08-18 — Integrate thickness noise into the tonal API
 
 **Files:** `BladeAD/core/acoustics/api.py`, `BladeAD/core/acoustics/var_groups.py`,

@@ -16,6 +16,7 @@ from BladeAD.core.acoustics.tonal import (
     compute_load_harmonics,
     compute_barry_magliozzi_thickness_noise,
     compute_lowson_loading_pressure,
+    compute_sears_load_harmonics,
     synthesize_lowson_rotor_pressure,
 )
 from BladeAD.core.acoustics.var_groups import (
@@ -38,6 +39,7 @@ __all__ = [
     "compute_load_harmonics",
     "compute_barry_magliozzi_thickness_noise",
     "compute_lowson_loading_pressure",
+    "compute_sears_load_harmonics",
     "synthesize_lowson_rotor_pressure",
     "compute_convected_distance",
     "evaluate_observer_geometry",

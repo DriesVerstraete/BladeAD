@@ -71,7 +71,13 @@ def evaluate_rotor_acoustics(
 
     if rotor_outputs is None:
         raise ValueError("Tonal acoustics require rotor analysis outputs.")
-    required = ("sectional_thrust", "sectional_drag", "radial_stations", "azimuth_angle")
+    required = (
+        "sectional_thrust",
+        "sectional_drag",
+        "radial_stations",
+        "radial_integration_weights",
+        "azimuth_angle",
+    )
     if any(getattr(rotor_outputs, name, None) is None for name in required):
         raise ValueError("Rotor outputs do not expose the required Lowson sectional data.")
     if rotor_outputs.sectional_loads_include_all_blades is not True:
@@ -115,8 +121,8 @@ def evaluate_rotor_acoustics(
         distance, direction, source_velocity, sound_speed
     )
     coefficients = compute_load_harmonics(
-        rotor_outputs.sectional_thrust,
-        rotor_outputs.sectional_drag,
+        rotor_outputs.sectional_thrust * rotor_outputs.radial_integration_weights,
+        rotor_outputs.sectional_drag * rotor_outputs.radial_integration_weights,
         rotor_outputs.azimuth_angle,
         mesh.num_blades,
         load_harmonics,

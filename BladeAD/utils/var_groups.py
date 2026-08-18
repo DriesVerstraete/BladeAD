@@ -241,6 +241,7 @@ class RotorAnalysisOutputs(csdl.VariableGroup):
     sectional_drag_coefficient: csdl.Variable = None
     radial_stations: csdl.Variable = None
     radial_element_width: csdl.Variable = None
+    radial_integration_weights: csdl.Variable = None
     azimuth_angle: csdl.Variable = None
     sectional_loads_include_all_blades: bool = True
     

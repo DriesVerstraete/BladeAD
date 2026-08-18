@@ -83,12 +83,17 @@ def test_bem_exposes_lowson_mesh_and_complete_rotor_sectional_loads():
     expected_shape = (1, num_radial, num_azimuthal)
     assert outputs.radial_stations.shape == expected_shape
     assert outputs.radial_element_width.shape == expected_shape
+    assert outputs.radial_integration_weights.shape == expected_shape
     assert outputs.azimuth_angle.shape == expected_shape
     assert outputs.sectional_loads_include_all_blades is True
     np.testing.assert_allclose(
         outputs.radial_element_width.value,
         np.full(expected_shape, (1.2 - 0.3 * 1.2) / (num_radial - 1)),
     )
+    expected_weights = np.ones(expected_shape)
+    expected_weights[:, 0, :] = 0.5
+    expected_weights[:, -1, :] = 0.5
+    np.testing.assert_allclose(outputs.radial_integration_weights.value, expected_weights)
 
     integrated_sectional_thrust = integrate_quantity(
         outputs.sectional_thrust, "trapezoidal"

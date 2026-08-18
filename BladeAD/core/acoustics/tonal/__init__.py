@@ -18,6 +18,7 @@ from BladeAD.core.acoustics.tonal.thickness import (
     BarryMagliozziThicknessOutputs,
     compute_barry_magliozzi_thickness_noise,
 )
+from BladeAD.core.acoustics.tonal.sears import compute_sears_load_harmonics
 
 __all__ = [
     "LoadHarmonics",
@@ -28,6 +29,7 @@ __all__ = [
     "compute_load_harmonics",
     "compute_barry_magliozzi_thickness_noise",
     "compute_lowson_steady_loading_pressure",
+    "compute_sears_load_harmonics",
     "compute_lowson_loading_pressure",
     "synthesize_lowson_rotor_pressure",
 ]

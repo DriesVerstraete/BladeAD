@@ -6,6 +6,22 @@ branch). This file logs every local modification, matching the pattern used for 
 (`999-software/rcaide/local-patches.md`) — check here before diffing against upstream or
 investigating "unexpected" BladeAD behavior.
 
+## 2026-08-18 — Add differentiable rotor-acoustics foundation
+
+**Files:** `BladeAD/core/acoustics/`, `tests/acoustics/test_foundation.py`
+
+**What:** added the opt-in rotor-acoustics API boundary, observer geometry and directivity,
+blade-passing frequencies, pressure-squared aggregation, SPL conversion, IEC-style A-weighting,
+and foundation tests including an observer-position derivative check. Tonal and broadband models
+remain explicitly disabled until their independent validation fixtures are frozen.
+
+**Why:** establish the shared CSDL-alpha graph and numerically tested conventions required by the
+project's accepted propeller-acoustics integration brief without changing existing aerodynamic
+execution or results.
+
+**Verification:** `rotor_design` ran `pytest tests/acoustics/test_foundation.py`: 5 passed,
+including the finite-difference comparison of the CSDL observer-position derivative.
+
 ## 2026-08-10 — Expose sectional Cl/Cd as `RotorAnalysisOutputs` fields (BEM only)
 
 **Files:** `BladeAD/core/BEM/compute_quantities_of_interest.py`,

@@ -6,6 +6,27 @@ branch). This file logs every local modification, matching the pattern used for 
 (`999-software/rcaide/local-patches.md`) — check here before diffing against upstream or
 investigating "unexpected" BladeAD behavior.
 
+## 2026-08-18 — Add Lowson steady-loading pressure kernel
+
+**Files:** `BladeAD/core/acoustics/tonal/lowson.py`,
+`tests/acoustics/test_lowson.py`
+
+**What:** added the differentiable, stationary-source Lowson pressure terms for steady loading
+(`lambda=0`) at requested blade-passing harmonics. The kernel evaluates Bessel arguments and
+radiation/near-field directivity, preserves radial pressure contributions, and returns separate
+per-blade cosine and sine components. Moving-source convection, coherent blade synthesis, and SPL
+aggregation are intentionally deferred.
+
+**Why:** validate signs, Bessel orders, dimensional scaling, and gradients before higher-level
+aggregation can conceal implementation errors.
+
+**Verification:** independent SciPy/NumPy pressure reference for two observers and two modes,
+explicit odd/even acoustic-order routing coverage, and CSDL derivative verification with respect
+to angular speed. The steady-load signs were reduced directly from a reproduced version of the
+published complex-amplitude equation: the audit found and avoided an odd-order sign regression in
+the pinned vectorized `lsdo_acoustics` implementation; its older loop implementation retains the
+published signs.
+
 ## 2026-08-18 — Start Lowson with differentiable load harmonics
 
 **Files:** `BladeAD/core/acoustics/tonal/`, `tests/acoustics/test_load_harmonics.py`

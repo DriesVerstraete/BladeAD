@@ -6,6 +6,18 @@ branch). This file logs every local modification, matching the pattern used for 
 (`999-software/rcaide/local-patches.md`) — check here before diffing against upstream or
 investigating "unexpected" BladeAD behavior.
 
+## 2026-08-18 — Make BladeAD authoritative for acoustic validation assets
+
+**Files:** `validation/acoustics/`
+
+**What:** established the version-controlled layout and provenance rules for acoustic fixtures,
+source-tool baselines, validation drivers, and compact reports. Experimental measurements and
+RCAIDE predictions are required to remain separate. Added reproducible extraction and integrity
+tests for F8745-D4 and APC 11x4 geometry, conditions, observers, and experimental spectra.
+
+**Why:** keep the validation evidence beside the reusable acoustic implementation and tests so a
+fresh checkout can locate and reproduce the model's evidence without project-local knowledge.
+
 ## 2026-08-18 — Add differentiable rotor-acoustics foundation
 
 **Files:** `BladeAD/core/acoustics/`, `tests/acoustics/test_foundation.py`

@@ -1,0 +1,4 @@
+case,rpm,axial_velocity_m_per_s,density_kg_per_m3,dynamic_viscosity_pa_s,speed_of_sound_m_per_s,temperature_k,angle_of_attack_deg,three_quarter_radius_twist_deg,num_azimuthal_stations
+1,2390.0,77.2,1.225,1.81e-05,343.376,288.16889478,0.0,21.0,16
+2,2710.0,77.0,1.225,1.81e-05,343.376,288.16889478,0.0,21.0,16
+3,2630.0,77.2,1.225,1.81e-05,343.376,288.16889478,0.0,21.0,16

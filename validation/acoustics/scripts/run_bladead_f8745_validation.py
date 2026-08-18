@@ -34,7 +34,7 @@ def _energetic_spl(values_db):
     return 10.0 * np.log10(np.sum(10.0 ** (values_db / 10.0)))
 
 
-def evaluate_f8745():
+def evaluate_f8745(source_velocity_scale=1.0, return_components=False):
     geometry = np.genfromtxt(FIXTURE / "geometry.csv", delimiter=",", names=True)
     observers = np.genfromtxt(FIXTURE / "observers.csv", delimiter=",", names=True)
     conditions = np.genfromtxt(
@@ -42,12 +42,12 @@ def evaluate_f8745():
     )
     archive_path = FIXTURE / "rcaide_line_source_baseline.npz"
     with np.load(archive_path, allow_pickle=False) as archive:
-        thrust = np.abs(
-            archive["energy.converters.F8745_D4_Propeller.disc_thrust_distribution"]
-        )
-        torque = np.abs(
-            archive["energy.converters.F8745_D4_Propeller.disc_torque_distribution"]
-        )
+        thrust = archive[
+            "energy.converters.F8745_D4_Propeller.disc_thrust_distribution"
+        ]
+        torque = archive[
+            "energy.converters.F8745_D4_Propeller.disc_torque_distribution"
+        ]
         azimuth = archive[
             "energy.converters.F8745_D4_Propeller.disc_azimuthal_distribution"
         ]
@@ -85,7 +85,10 @@ def evaluate_f8745():
         rpm=_variable(conditions["rpm"]),
         mesh_velocity=_variable(
             np.column_stack(
-                (conditions["axial_velocity_m_per_s"], np.zeros((num_cases, 2)))
+                (
+                    source_velocity_scale * conditions["axial_velocity_m_per_s"],
+                    np.zeros((num_cases, 2)),
+                )
             )
         ),
         mesh_parameters=mesh,
@@ -132,6 +135,12 @@ def evaluate_f8745():
         ),
     )
     prediction = acoustics.tonal_mode_spl.value.copy()
+    if return_components:
+        prediction = {
+            "combined": prediction,
+            "loading": acoustics.loading_mode_spl.value.copy(),
+            "thickness": acoustics.thickness_mode_spl.value.copy(),
+        }
     recorder.stop()
     return prediction
 
@@ -202,8 +211,9 @@ def _write_report(path, summary):
         "# F8745-D4 BladeAD tonal validation",
         "",
         "This comparison evaluates BladeAD Lowson loading plus Barry–Magliozzi thickness noise",
-        "using the frozen RCAIDE line-source run's aerodynamic disk loads. It isolates acoustic",
-        "radiation-model differences; it is not a validation of BladeAD BEM aerodynamics.",
+        "using the frozen RCAIDE line-source run's aerodynamic disk loads. BladeAD BEM is not",
+        "used. The result measures the complete load-adapter, propagation, and acoustic-model",
+        "chain; the accompanying interface audit separates those contributions where possible.",
         "",
         "No calibration or fixture-specific correction is applied.",
         "",
@@ -226,8 +236,10 @@ def _write_report(path, summary):
             "must not yet be used as experimental design authority for this forward-flight case.",
             "",
             "The failure does not invalidate the HG equation/reference verification. It shows that",
-            "the current compact Lowson/Sears/thickness scope does not reproduce the mechanisms or",
-            "source representation captured by the F8745-D4 measurements and RCAIDE Hanson models.",
+            "the current BladeAD acoustic chain does not reproduce the mechanisms or source",
+            "representation captured by the F8745-D4 measurements and RCAIDE Hanson models. The",
+            "audit rules out BEM and basic load conversion, but retains propagation convention as",
+            "an unresolved contributor.",
             "",
             "Detailed harmonic results are in `bladead_f8745_detailed.csv`.",
         ]

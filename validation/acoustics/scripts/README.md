@@ -33,7 +33,16 @@ Run the BladeAD F8745-D4 acoustic-radiation comparison in the `rotor_design` env
 python run_bladead_f8745_validation.py
 ```
 
-This uses aerodynamic disk loads already frozen in the RCAIDE line-source archive, converts its
-negative propeller-coordinate sectional distributions to BladeAD's positive thrust/drag magnitude
-convention, and evaluates BladeAD Lowson plus Barry–Magliozzi noise. It does not import RCAIDE or
-claim to validate BladeAD BEM aerodynamics.
+This uses signed aerodynamic disk loads already frozen in the RCAIDE line-source archive and
+evaluates BladeAD Lowson plus Barry–Magliozzi noise. The signed distributions include negative
+root-region elements but integrate exactly to RCAIDE's positive per-blade totals. It does not
+import RCAIDE or claim to validate BladeAD BEM aerodynamics.
+
+Audit the load adapter and propagation convention with:
+
+```bash
+python audit_f8745_interface.py
+```
+
+This writes the parity audit and convection-sensitivity table without modifying model constants or
+acceptance thresholds.

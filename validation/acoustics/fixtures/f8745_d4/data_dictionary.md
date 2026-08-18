@@ -37,3 +37,17 @@ observers, propagation settings, and runtime/source metadata.
 
 The 29-bin RCAIDE spectra exceed the 18 experimental harmonics. Comparisons must select bins by
 their meaning/frequency, not truncate solely by array shape without checking the source convention.
+
+## BladeAD load-adapter convention
+
+The BladeAD comparison uses the signed `disc_thrust_distribution` and
+`disc_torque_distribution`. These are per-blade, radially integrated distributions repeated over
+the azimuth axis. They contain legitimate negative root-region elements but sum exactly to
+`thrust_per_blade` and `torque_per_blade`; applying an elementwise absolute value is incorrect.
+BladeAD's complete-rotor sectional convention is obtained by multiplying each signed distribution
+by `number_of_blades` exactly once. Radial integration weights are then unity because the archived
+distributions already contain trapezoidal element widths and endpoint weights.
+
+The baseline acoustic propagation uses the archived positive-x inertial velocity. Stationary and
+reversed-velocity variants are retained only as convention sensitivity checks, not alternative
+accepted baselines.

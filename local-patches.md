@@ -9,17 +9,22 @@ investigating "unexpected" BladeAD behavior.
 ## 2026-08-18 — Add F8745-D4 experimental tonal validation
 
 **Files:** `validation/acoustics/scripts/run_bladead_f8745_validation.py`,
+`validation/acoustics/scripts/audit_f8745_interface.py`,
 `validation/acoustics/reports/`, `tests/acoustics/test_f8745_bladead_report.py`
 
 **What:** added a reproducible BladeAD Lowson plus Barry–Magliozzi comparison against all 108
-F8745-D4 measured harmonics, using frozen RCAIDE disk loads to isolate acoustic-radiation error.
+F8745-D4 measured harmonics using frozen RCAIDE disk loads. Added a parity audit for signed load
+transfer, blade scaling, quadrature, azimuthal uniformity, observer geometry, acoustic components,
+and source-velocity convention sensitivity.
 
 **Why:** apply the pre-frozen experimental gate before allowing the tonal model to influence an
 optimised rotor design, while keeping RCAIDE predictions separate from experimental truth.
 
-**Verification:** every case fails the frozen 3 dB MAE/overall thresholds, with 13.320–22.140 dB
-harmonic MAE and -11.488 to -16.779 dB overall error. The uncalibrated failure is preserved as an
-active regression and the model is not accepted as forward-flight experimental design authority.
+**Verification:** every baseline case fails the frozen 3 dB MAE/overall thresholds, with
+13.434–22.159 dB harmonic MAE and -12.399 to -16.872 dB overall error. The audit excludes BladeAD
+BEM and closes the basic load/observer adapter invariants. Reversing source velocity does not close
+the 90-degree gap, so propagation remains a contributor but not a complete explanation. The
+uncalibrated failure is preserved and the model is not accepted as forward-flight design authority.
 
 ## 2026-08-18 — Restore BEM pitch and lag input forwarding
 

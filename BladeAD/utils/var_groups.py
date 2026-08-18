@@ -41,6 +41,10 @@ class RotorMeshParameters(csdl.VariableGroup):
     num_azimuthal: int
     num_blades: int
     norm_hub_radius: float = 0.2
+    thickness_to_chord: csdl.Variable = None
+    normalized_thickness_shape: csdl.Variable = None
+    thickness_shape_chordwise_locations: csdl.Variable = None
+    thickness_shape_chordwise_weights: csdl.Variable = None
 
 
 @dataclass
@@ -228,5 +232,9 @@ class RotorAnalysisOutputs(csdl.VariableGroup):
     sectional_inflow_angle = None
     sectional_lift_coefficient: csdl.Variable = None
     sectional_drag_coefficient: csdl.Variable = None
+    radial_stations: csdl.Variable = None
+    radial_element_width: csdl.Variable = None
+    radial_integration_weights: csdl.Variable = None
+    azimuth_angle: csdl.Variable = None
+    sectional_loads_include_all_blades: bool = False
     
-

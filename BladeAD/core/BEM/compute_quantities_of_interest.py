@@ -113,10 +113,14 @@ def compute_quantities_of_interest(
     # same csdl.Variables that already flow through this function.
     bem_outputs.sectional_lift_coefficient = Cl
     bem_outputs.sectional_drag_coefficient = Cd
+    bem_outputs.radial_stations = radius_vector
+    bem_outputs.radial_element_width = dr
+    weights = np.ones(shape)
+    if integration_scheme == "trapezoidal":
+        weights[:, (0, -1), :] = 0.5
+    bem_outputs.radial_integration_weights = csdl.Variable(value=weights)
+    bem_outputs.sectional_loads_include_all_blades = True
 
     return bem_outputs
-
-
-
 
 

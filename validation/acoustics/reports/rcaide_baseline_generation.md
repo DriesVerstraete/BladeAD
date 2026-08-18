@@ -1,8 +1,10 @@
 # RCAIDE acoustic baseline generation
 
-**Source commit:** `c88217f3fd0ef9740e86cfc4241bb4362bb7a766`  
-**Source driver SHA-256:** `e642ef193f6290b31cf87d18f909baf77af3d3eec322ad2bda49515b005ff2f9`  
-**Runtime:** Python 3.12.13, NumPy 1.26.4, macOS arm64  
+**Source commit:** `c88217f3fd0ef9740e86cfc4241bb4362bb7a766`
+
+**Source driver SHA-256:** `e642ef193f6290b31cf87d18f909baf77af3d3eec322ad2bda49515b005ff2f9`
+
+**Runtime:** Python 3.12.13, NumPy 1.26.4, macOS arm64
 **Generated models:** F8745-D4 line source, F8745-D4 plane source, APC 11x4 plane source
 
 RCAIDE's equations, settings, geometries, operating cases, and validation-driver assertions were

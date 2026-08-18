@@ -10,9 +10,11 @@ from BladeAD.core.acoustics.observers import (
 )
 from BladeAD.core.acoustics.tonal import (
     LoadHarmonics,
+    BarryMagliozziThicknessOutputs,
     LowsonLoadingPressure,
     LowsonRotorTonalOutputs,
     compute_load_harmonics,
+    compute_barry_magliozzi_thickness_noise,
     compute_lowson_loading_pressure,
     synthesize_lowson_rotor_pressure,
 )
@@ -25,6 +27,7 @@ from BladeAD.core.acoustics.weighting import a_weighting_db
 
 __all__ = [
     "AcousticObserverData",
+    "BarryMagliozziThicknessOutputs",
     "LoadHarmonics",
     "LowsonLoadingPressure",
     "LowsonRotorTonalOutputs",
@@ -33,6 +36,7 @@ __all__ = [
     "a_weighting_db",
     "energetic_sum",
     "compute_load_harmonics",
+    "compute_barry_magliozzi_thickness_noise",
     "compute_lowson_loading_pressure",
     "synthesize_lowson_rotor_pressure",
     "compute_convected_distance",

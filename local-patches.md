@@ -6,6 +6,21 @@ branch). This file logs every local modification, matching the pattern used for 
 (`999-software/rcaide/local-patches.md`) — check here before diffing against upstream or
 investigating "unexpected" BladeAD behavior.
 
+## 2026-08-18 — Add differentiable Barry–Magliozzi thickness noise
+
+**Files:** `BladeAD/core/acoustics/tonal/thickness.py`,
+`tests/acoustics/test_thickness.py`, `validation/acoustics/fixtures/lowson_hg_matlab/`
+
+**What:** added per-mode RMS pressure, mean-square pressure, SPL, and total SPL for the
+Barry–Magliozzi thickness formulation used by the pinned HG validation implementation.
+
+**Why:** thickness noise is a distinct coherent tonal source and must be validated independently
+before combining it with Lowson loading pressure in the 37-point HG directivity case.
+
+**Verification:** direct comparison with all 33 HJ thickness-only reference angles (less than
+1 dB absolute error and less than 0.01 dB shape-residual range, with the observed common offset
+left uncalibrated) plus CSDL derivative verification with respect to angular speed.
+
 ## 2026-08-18 — Freeze the HG-MATLAB combined directivity fixture
 
 **Files:** `validation/acoustics/fixtures/lowson_hg_matlab/`,

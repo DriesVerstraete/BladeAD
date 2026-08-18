@@ -14,13 +14,19 @@ from BladeAD.core.acoustics.tonal.synthesis import (
     LowsonRotorTonalOutputs,
     synthesize_lowson_rotor_pressure,
 )
+from BladeAD.core.acoustics.tonal.thickness import (
+    BarryMagliozziThicknessOutputs,
+    compute_barry_magliozzi_thickness_noise,
+)
 
 __all__ = [
     "LoadHarmonics",
+    "BarryMagliozziThicknessOutputs",
     "LowsonSteadyLoadingPressure",
     "LowsonLoadingPressure",
     "LowsonRotorTonalOutputs",
     "compute_load_harmonics",
+    "compute_barry_magliozzi_thickness_noise",
     "compute_lowson_steady_loading_pressure",
     "compute_lowson_loading_pressure",
     "synthesize_lowson_rotor_pressure",

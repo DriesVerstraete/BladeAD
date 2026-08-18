@@ -20,6 +20,17 @@ mapping must be resolved when the combined model is reproduced.
 source does not report measurement uncertainty, spectral bandwidth, microphone calibration, or
 a primary citation for these transcribed values.
 
+`bm_thickness_reference.csv` preserves the separate 33-point HJ Barry–Magliozzi thickness-only
+reference used by the pinned `test_BM_thickness.py`: four blades, 5500 rpm, radius 0.1588 m,
+constant 0.03176 m chord, thickness ratio 0.12, observer radius 2.2703 m, and angles 10–170
+degrees from the rotor axis.
+
+The audited BladeAD port is approximately 0.64 dB above this HJ curve at every angle. The pinned
+source test also treats the curve as a plotted comparison rather than an exact assertion. The
+frozen acceptance criteria are therefore less than 1 dB maximum absolute error and less than
+0.01 dB peak-to-peak variation after removing the common level offset; no calibration factor is
+applied.
+
 ## Acceptance status
 
 - Loading-only equation (10): independently verified in `tests/acoustics/test_loading.py`.

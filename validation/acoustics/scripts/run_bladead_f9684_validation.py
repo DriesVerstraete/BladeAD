@@ -243,7 +243,9 @@ def main():
         (REPORTS / "bladead_f9684_aerodynamics.csv", aerodynamic),
     ):
         with path.open("w", newline="") as stream:
-            writer = csv.DictWriter(stream, fieldnames=rows[0].keys())
+            writer = csv.DictWriter(
+                stream, fieldnames=rows[0].keys(), lineterminator="\n"
+            )
             writer.writeheader()
             writer.writerows(rows)
 

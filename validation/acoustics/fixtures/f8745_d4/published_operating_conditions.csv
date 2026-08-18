@@ -1,0 +1,4 @@
+case,rpm,axial_velocity_m_per_s,shaft_power_kw,measured_thrust_n,shaft_angle_deg,temperature_k,measured_three_quarter_radius_blade_angle_deg,computed_three_quarter_radius_blade_angle_deg
+1,2400.0,77.2,73.6,642.0,0.0,290.3,20.8,22.3
+2,2700.0,77.0,184.6,1907.0,0.0,289.4,20.8,22.0
+3,2700.0,77.2,152.1,1500.0,0.0,287.0,19.9,21.2

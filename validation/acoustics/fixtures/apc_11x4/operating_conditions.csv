@@ -1,0 +1,4 @@
+case,rpm,inflow_ratio,axial_velocity_m_per_s,density_kg_per_m3,dynamic_viscosity_pa_s,speed_of_sound_m_per_s,temperature_k,angle_of_attack_deg,num_azimuthal_stations
+1,3600.0,0.08,4.213252739582343,1.225,1.78899787e-05,343.0,286.16889478,0.0,16
+2,4200.0,0.08,4.915461529512734,1.225,1.78899787e-05,343.0,286.16889478,0.0,16
+3,4800.0,0.08,5.617670319443124,1.225,1.78899787e-05,343.0,286.16889478,0.0,16

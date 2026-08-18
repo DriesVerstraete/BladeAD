@@ -1,0 +1,2 @@
+case,rpm,tip_radius_m,hub_radius_m,number_of_blades,density_kg_per_m3,advance_ratio,measured_thrust_coefficient
+DJI9443-HOVER-5400,5400.0,0.12,0.00624,2,1.225,0.0001,0.072

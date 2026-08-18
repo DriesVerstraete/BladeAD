@@ -1,0 +1,1714 @@
+{
+  "file": "rcaide_line_source_baseline.npz",
+  "rotor_tag": "F8745_D4_Propeller",
+  "fidelity": "line_source",
+  "source_commit": "c88217f3fd0ef9740e86cfc4241bb4362bb7a766",
+  "source_driver_sha256": "e642ef193f6290b31cf87d18f909baf77af3d3eec322ad2bda49515b005ff2f9",
+  "numpy_trapezoid_compatibility_alias": true,
+  "arrays": {
+    "acoustics.converters.F8745_D4_Propeller.SPL": {
+      "shape": [
+        3,
+        19
+      ],
+      "dtype": "float64"
+    },
+    "acoustics.converters.F8745_D4_Propeller.SPL_1_3_spectrum": {
+      "shape": [
+        3,
+        19,
+        29
+      ],
+      "dtype": "float64"
+    },
+    "acoustics.converters.F8745_D4_Propeller.SPL_1_3_spectrum_dBA": {
+      "shape": [
+        3,
+        19,
+        29
+      ],
+      "dtype": "float64"
+    },
+    "acoustics.converters.F8745_D4_Propeller.SPL_broadband": {
+      "shape": [
+        3,
+        19
+      ],
+      "dtype": "float64"
+    },
+    "acoustics.converters.F8745_D4_Propeller.SPL_broadband_1_3_spectrum": {
+      "shape": [
+        3,
+        19,
+        29
+      ],
+      "dtype": "float64"
+    },
+    "acoustics.converters.F8745_D4_Propeller.SPL_broadband_1_3_spectrum_dBA": {
+      "shape": [
+        3,
+        19,
+        29
+      ],
+      "dtype": "float64"
+    },
+    "acoustics.converters.F8745_D4_Propeller.SPL_dBA": {
+      "shape": [
+        3,
+        19
+      ],
+      "dtype": "float64"
+    },
+    "acoustics.converters.F8745_D4_Propeller.SPL_harmonic": {
+      "shape": [
+        3,
+        19
+      ],
+      "dtype": "float64"
+    },
+    "acoustics.converters.F8745_D4_Propeller.SPL_harmonic_1_3_spectrum": {
+      "shape": [
+        3,
+        19,
+        29
+      ],
+      "dtype": "float64"
+    },
+    "acoustics.converters.F8745_D4_Propeller.SPL_harmonic_1_3_spectrum_dBA": {
+      "shape": [
+        3,
+        19,
+        29
+      ],
+      "dtype": "float64"
+    },
+    "acoustics.converters.F8745_D4_Propeller.SPL_harmonic_bpf_spectrum": {
+      "shape": [
+        3,
+        19,
+        29
+      ],
+      "dtype": "float64"
+    },
+    "acoustics.converters.F8745_D4_Propeller.SPL_harmonic_bpf_spectrum_dBA": {
+      "shape": [
+        3,
+        19,
+        29
+      ],
+      "dtype": "float64"
+    },
+    "acoustics.converters.F8745_D4_Propeller.blade_passing_frequencies": {
+      "shape": [
+        29
+      ],
+      "dtype": "float64"
+    },
+    "acoustics.converters.F8745_D4_Propeller.one_third_frequency_spectrum": {
+      "shape": [
+        29
+      ],
+      "dtype": "float64"
+    },
+    "acoustics.number_of_microphones": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "acoustics.relative_microphone_locations": {
+      "shape": [
+        1,
+        19,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.angles.alpha": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.angles.beta": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.angles.phi": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.coefficients.drag.asymmetry_trim.total": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.coefficients.drag.compressible.total": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.coefficients.drag.compressible.wave.lift": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.coefficients.drag.compressible.wave.total": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.coefficients.drag.compressible.wave.volume": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.coefficients.drag.cooling.total": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.coefficients.drag.form.total": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.coefficients.drag.induced.efficiency_factor": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.coefficients.drag.induced.inviscid": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.coefficients.drag.induced.total": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.coefficients.drag.induced.viscous": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.coefficients.drag.total": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.coefficients.drag.trim.total": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.coefficients.drag.wave.total": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.coefficients.drag.windmilling.total": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.coefficients.lift.inviscid.total": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.coefficients.lift.total": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "aerodynamics.oswald_efficiency": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.battery_fuel_cell_power_split_ratio": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.advance_ratio": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.azimuthal_distribution": {
+      "shape": [
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.blade_H_distribution": {
+      "shape": [
+        3,
+        30
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.blade_Mach_number": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.blade_axial_induced_velocity": {
+      "shape": [
+        3,
+        30
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.blade_axial_velocity": {
+      "shape": [
+        3,
+        30
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.blade_dQ_dr": {
+      "shape": [
+        3,
+        30
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.blade_dT_dr": {
+      "shape": [
+        3,
+        30
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.blade_effective_angle_of_attack": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.blade_pitch_command": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.blade_reynolds_number": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.blade_tangential_induced_velocity": {
+      "shape": [
+        3,
+        30
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.blade_tangential_velocity": {
+      "shape": [
+        3,
+        30
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.blade_thrust_distribution": {
+      "shape": [
+        3,
+        30
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.blade_torque_distribution": {
+      "shape": [
+        3,
+        30
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.blade_velocity": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.commanded_thrust_vector_angle": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.converged_inflow_ratio": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.density": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.design_flag": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "energy.converters.F8745_D4_Propeller.disc_Mach_number": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.disc_axial_induced_velocity": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.disc_axial_velocity": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.disc_azimuthal_distribution": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.disc_circulation": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.disc_dQ_dr": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.disc_dT_dr": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.disc_effective_angle_of_attack": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.disc_loading": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.disc_radial_distribution": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.disc_reynolds_number": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.disc_tangential_induced_velocity": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.disc_tangential_velocity": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.disc_thrust_distribution": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.disc_torque_distribution": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.disc_velocity": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.drag_coefficient": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.efficiency": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.figure_of_merit": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.lift_coefficient": {
+      "shape": [
+        3,
+        30,
+        16
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.number_azimuthal_stations": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "energy.converters.F8745_D4_Propeller.number_radial_stations": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "energy.converters.F8745_D4_Propeller.omega": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.orientation": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.power": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.power_coefficient": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.power_loading": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.rotor_drag": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.rotor_drag_coefficient": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.rpm": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.speed_of_sound": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.thrust": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.thrust_coefficient": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.thrust_per_blade": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.tip_mach": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.torque": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.torque_coefficient": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.torque_per_blade": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.converters.F8745_D4_Propeller.velocity": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "energy.cumulative_fuel_consumption": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.fuel_consumption": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.hybrid_power_split_ratio": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.power": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "energy.thrust_force_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "energy.thrust_moment_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.body.inertial_rotations": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.body.moment_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.body.thrust_force_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.body.thrust_moment_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.body.transform_to_inertial": {
+      "shape": [
+        3,
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.body.velocity_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.inertial.acceleration_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.inertial.aircraft_range": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "frames.inertial.angular_acceleration_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.inertial.angular_velocity_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.inertial.climb_rate": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "frames.inertial.gravity_force_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.inertial.position_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.inertial.time": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "frames.inertial.total_force_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.inertial.total_moment_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.inertial.velocity_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.planet.latitude": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "frames.planet.longitude": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "frames.planet.true_course": {
+      "shape": [
+        3,
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.planet.true_heading": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "frames.wind.angular_acceleration_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.wind.angular_velocity_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.wind.body_rotations": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.wind.force_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.wind.moment_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.wind.total_force_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.wind.total_moment_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.wind.transform_to_inertial": {
+      "shape": [
+        3,
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "frames.wind.velocity_vector": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "freestream.altitude": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "freestream.delta_ISA": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "freestream.density": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "freestream.dynamic_pressure": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "freestream.dynamic_viscosity": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "freestream.gravity": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "freestream.mach_number": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "freestream.pressure": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "freestream.reynolds_number": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "freestream.speed_of_sound": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "freestream.temperature": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "freestream.u": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "freestream.v": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "freestream.velocity": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "freestream.w": {
+      "shape": [
+        3,
+        1
+      ],
+      "dtype": "float64"
+    },
+    "observer.position_m": {
+      "shape": [
+        19,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoil_polar_stations": {
+      "shape": [
+        30
+      ],
+      "dtype": "int64"
+    },
+    "rotor.airfoils.airfoil.coordinate_file": {
+      "shape": [],
+      "dtype": "<U165"
+    },
+    "rotor.airfoils.airfoil.geometry.camber_coordinates": {
+      "shape": [
+        100
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.geometry.max_thickness": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.geometry.thickness_to_chord": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.geometry.x_coordinates": {
+      "shape": [
+        201
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.geometry.x_lower_surface": {
+      "shape": [
+        100
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.geometry.x_upper_surface": {
+      "shape": [
+        100
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.geometry.y_coordinates": {
+      "shape": [
+        201
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.geometry.y_lower_surface": {
+      "shape": [
+        100
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.geometry.y_upper_surface": {
+      "shape": [
+        100
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.mass_properties.center_of_gravity": {
+      "shape": [
+        1,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.mass_properties.mass": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "rotor.airfoils.airfoil.mass_properties.moments_of_inertia.center": {
+      "shape": [
+        3
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.mass_properties.moments_of_inertia.non_dimensional_tensor": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.mass_properties.moments_of_inertia.tensor": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.number_of_points": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "rotor.airfoils.airfoil.orientation_euler_angles": {
+      "shape": [
+        3
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.origin": {
+      "shape": [
+        1,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.polar_files": {
+      "shape": [
+        5
+      ],
+      "dtype": "<U189"
+    },
+    "rotor.airfoils.airfoil.polars.angle_of_attacks": {
+      "shape": [
+        105
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.polars.aoa_from_polar": {
+      "shape": [
+        5,
+        89
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.polars.boundary_layer.angle_of_attacks": {
+      "shape": [
+        7
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.polars.boundary_layer.reynolds_numbers": {
+      "shape": [
+        7
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.polars.cm": {
+      "shape": [
+        7,
+        7
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.polars.drag_coefficients": {
+      "shape": [
+        5,
+        105
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.polars.drag_distribution": {
+      "shape": [
+        7,
+        7,
+        100
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.polars.lift_coefficients": {
+      "shape": [
+        5,
+        105
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.polars.lift_distribution": {
+      "shape": [
+        7,
+        7,
+        100
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.polars.re_from_polar": {
+      "shape": [
+        5
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.polars.reynolds_numbers": {
+      "shape": [
+        5
+      ],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.tag": {
+      "shape": [],
+      "dtype": "<U7"
+    },
+    "rotor.airfoils.airfoil.volume_properties.gross_volume": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.volume_properties.net_volume": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.airfoils.airfoil.xy_plane_symmetric": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "rotor.airfoils.airfoil.xz_plane_symmetric": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "rotor.airfoils.airfoil.yz_plane_symmetric": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "rotor.blade_pitch_command": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.blade_solidity": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.chord_distribution": {
+      "shape": [
+        30
+      ],
+      "dtype": "float64"
+    },
+    "rotor.clockwise_rotation": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "rotor.cruise.design_blade_pitch_command": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.cruise.design_efficiency": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.cruise.design_lift_coefficient": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.cruise.design_power_coefficient": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.cruise.design_thrust_coefficient": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.cruise.design_torque_coefficient": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.ducted": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "rotor.electric_propulsion_fraction": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.fidelity": {
+      "shape": [],
+      "dtype": "<U44"
+    },
+    "rotor.flap_angle": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.hub_radius": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.induced_power_factor": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.inputs.blade_pitch_command": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "rotor.inputs.y_axis_rotation": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.mass_properties.center_of_gravity": {
+      "shape": [
+        1,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "rotor.mass_properties.mass": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "rotor.mass_properties.moments_of_inertia.center": {
+      "shape": [
+        3
+      ],
+      "dtype": "float64"
+    },
+    "rotor.mass_properties.moments_of_inertia.non_dimensional_tensor": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "rotor.mass_properties.moments_of_inertia.tensor": {
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "rotor.max_thickness_distribution": {
+      "shape": [
+        30
+      ],
+      "dtype": "float64"
+    },
+    "rotor.mid_chord_alignment": {
+      "shape": [
+        30
+      ],
+      "dtype": "float64"
+    },
+    "rotor.nonuniform_freestream": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "rotor.number_azimuthal_stations": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "rotor.number_of_blades": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "rotor.optimization_parameters.ideal_SPL_dBA": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "rotor.optimization_parameters.ideal_efficiency": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.optimization_parameters.ideal_figure_of_merit": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.optimization_parameters.multiobjective_acoustic_weight": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.optimization_parameters.multiobjective_aeroacoustic_weight": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.optimization_parameters.multiobjective_performance_weight": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.optimization_parameters.noise_evaluation_angle": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.optimization_parameters.noise_evaluation_distance": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "rotor.optimization_parameters.tip_mach_range": {
+      "shape": [
+        2
+      ],
+      "dtype": "float64"
+    },
+    "rotor.optimization_parameters.tolerance": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.orientation_euler_angles": {
+      "shape": [
+        3
+      ],
+      "dtype": "float64"
+    },
+    "rotor.origin": {
+      "shape": [
+        1,
+        3
+      ],
+      "dtype": "float64"
+    },
+    "rotor.phase_offset_angle": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.profile_drag_coefficient": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.radius_distribution": {
+      "shape": [
+        30
+      ],
+      "dtype": "float64"
+    },
+    "rotor.sol_tolerance": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.start_angle": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.start_angle_idx": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "rotor.sweep_distribution": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.tag": {
+      "shape": [],
+      "dtype": "<U18"
+    },
+    "rotor.thickness_to_chord": {
+      "shape": [
+        30
+      ],
+      "dtype": "float64"
+    },
+    "rotor.tip_radius": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.twist_distribution": {
+      "shape": [
+        30
+      ],
+      "dtype": "float64"
+    },
+    "rotor.use_2d_analysis": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "rotor.volume_properties.gross_volume": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.volume_properties.net_volume": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "rotor.vtk_airfoil_points": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "rotor.xy_plane_symmetric": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "rotor.xz_plane_symmetric": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "rotor.yz_plane_symmetric": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "runtime_numpy": {
+      "shape": [],
+      "dtype": "<U6"
+    },
+    "runtime_numpy_trapezoid_compatibility_alias": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "runtime_platform": {
+      "shape": [],
+      "dtype": "<U28"
+    },
+    "runtime_python": {
+      "shape": [],
+      "dtype": "<U84"
+    },
+    "settings.aircraft_destination_coordinates": {
+      "shape": [
+        2
+      ],
+      "dtype": "float64"
+    },
+    "settings.aircraft_destination_location": {
+      "shape": [
+        3
+      ],
+      "dtype": "int64"
+    },
+    "settings.aircraft_origin_coordinates": {
+      "shape": [
+        2
+      ],
+      "dtype": "float64"
+    },
+    "settings.aircraft_origin_location": {
+      "shape": [
+        3
+      ],
+      "dtype": "int64"
+    },
+    "settings.approach": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "settings.center_frequencies": {
+      "shape": [
+        29
+      ],
+      "dtype": "float64"
+    },
+    "settings.fidelity": {
+      "shape": [],
+      "dtype": "<U11"
+    },
+    "settings.flyover": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "settings.harmonics": {
+      "shape": [
+        29
+      ],
+      "dtype": "int64"
+    },
+    "settings.lower_frequencies": {
+      "shape": [
+        29
+      ],
+      "dtype": "float64"
+    },
+    "settings.mean_sea_level_altitude": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "settings.microphone_max_x": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "settings.microphone_max_y": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "settings.microphone_min_x": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "settings.microphone_min_y": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "settings.microphone_x_resolution": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "settings.microphone_y_resolution": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "settings.noise_hemisphere": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "settings.noise_hemisphere_phi_angles": {
+      "shape": [
+        6
+      ],
+      "dtype": "float64"
+    },
+    "settings.noise_hemisphere_radius": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "settings.noise_hemisphere_theta_angles": {
+      "shape": [
+        12
+      ],
+      "dtype": "float64"
+    },
+    "settings.noise_reduction_factors.SPL_dbA": {
+      "shape": [],
+      "dtype": "float64"
+    },
+    "settings.noise_times_steps": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "settings.number_of_microphone_in_stencil": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "settings.print_noise_output": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "settings.sideline": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "settings.sideline_x_position": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "settings.upper_frequencies": {
+      "shape": [
+        29
+      ],
+      "dtype": "float64"
+    },
+    "settings.use_plane_loading_surrogate": {
+      "shape": [],
+      "dtype": "bool"
+    },
+    "settings.wing_wake_interactional_dB_adjustment": {
+      "shape": [],
+      "dtype": "int64"
+    },
+    "source_commit": {
+      "shape": [],
+      "dtype": "<U40"
+    },
+    "source_driver": {
+      "shape": [],
+      "dtype": "<U64"
+    },
+    "source_driver_sha256": {
+      "shape": [],
+      "dtype": "<U64"
+    }
+  }
+}

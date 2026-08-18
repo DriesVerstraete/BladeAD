@@ -6,10 +6,16 @@ from BladeAD.core.acoustics.tonal.lowson import (
     LowsonSteadyLoadingPressure,
     compute_lowson_steady_loading_pressure,
 )
+from BladeAD.core.acoustics.tonal.loading import (
+    LowsonLoadingPressure,
+    compute_lowson_loading_pressure,
+)
 
 __all__ = [
     "LoadHarmonics",
     "LowsonSteadyLoadingPressure",
+    "LowsonLoadingPressure",
     "compute_load_harmonics",
     "compute_lowson_steady_loading_pressure",
+    "compute_lowson_loading_pressure",
 ]

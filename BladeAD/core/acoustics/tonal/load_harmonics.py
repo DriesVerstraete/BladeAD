@@ -59,12 +59,19 @@ def compute_load_harmonics(
     phase = harmonic_expanded * azimuth_expanded
     cosine = csdl.cos(phase)
     sine = csdl.sin(phase)
-    normalization = 1.0 / num_azimuthal
+    normalization_values = np.asarray(
+        [1.0 if harmonic == 0 else 2.0 for harmonic in harmonic_numbers]
+    ) / num_azimuthal
+    normalization = csdl.expand(
+        csdl.Variable(value=normalization_values),
+        (num_nodes, num_harmonics, num_radial),
+        "h->ihr",
+    )
 
     return LoadHarmonics(
         thrust_cosine=normalization * csdl.sum(thrust_expanded * cosine, axes=(3,)),
-        thrust_sine=-normalization * csdl.sum(thrust_expanded * sine, axes=(3,)),
+        thrust_sine=normalization * csdl.sum(thrust_expanded * sine, axes=(3,)),
         drag_cosine=normalization * csdl.sum(drag_expanded * cosine, axes=(3,)),
-        drag_sine=-normalization * csdl.sum(drag_expanded * sine, axes=(3,)),
+        drag_sine=normalization * csdl.sum(drag_expanded * sine, axes=(3,)),
         harmonic_numbers=harmonic_numbers,
     )

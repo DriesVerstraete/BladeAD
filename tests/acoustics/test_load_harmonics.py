@@ -27,9 +27,11 @@ def test_load_harmonics_match_independent_discrete_fourier_reference():
     expected_thrust_cosine = np.mean(
         per_blade_thrust[:, None, :, :] * np.cos(phase)[None, :, None, :], axis=3
     )
-    expected_thrust_sine = -np.mean(
+    expected_thrust_sine = np.mean(
         per_blade_thrust[:, None, :, :] * np.sin(phase)[None, :, None, :], axis=3
     )
+    expected_thrust_cosine[:, 1:, :] *= 2.0
+    expected_thrust_sine[:, 1:, :] *= 2.0
     np.testing.assert_allclose(outputs.thrust_cosine.value, expected_thrust_cosine, atol=1e-14)
     np.testing.assert_allclose(outputs.thrust_sine.value, expected_thrust_sine, atol=1e-14)
     np.testing.assert_allclose(outputs.drag_cosine.value, 0.2 * expected_thrust_cosine, atol=1e-14)

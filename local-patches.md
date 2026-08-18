@@ -6,6 +6,26 @@ branch). This file logs every local modification, matching the pattern used for 
 (`999-software/rcaide/local-patches.md`) — check here before diffing against upstream or
 investigating "unexpected" BladeAD behavior.
 
+## 2026-08-18 — Add arbitrary-harmonic Lowson loading pressure
+
+**Files:** `BladeAD/core/acoustics/tonal/loading.py`,
+`BladeAD/core/acoustics/tonal/load_harmonics.py`, `tests/acoustics/`
+
+**What:** implemented the axial and circumferential-force terms of Lowson and Ollerhead (1969)
+equation (10) for arbitrary non-negative loading harmonics. Real CSDL graphs represent the
+published complex phase exactly, including negative Bessel orders when `lambda > n`. Corrected
+the Fourier projection to use the equation (9) convention: the zero harmonic is the mean,
+non-zero cosine/sine coefficients are twice the mean projection, and the sine coefficient has
+the positive sign associated with BladeAD's increasing azimuth phase.
+
+**Why:** avoid the opaque parity/sign matrices and normalization inherited from `lsdo_acoustics`;
+the direct complex-equation reduction is easier to audit and differentiates cleanly.
+
+**Verification:** independent SciPy/Python-complex evaluation of equation (10), including
+`lambda > n`; exact reduction to the separately audited steady kernel for `lambda=0`; CSDL
+derivative verification with respect to unsteady thrust coefficients; full Fourier coefficient
+value and derivative tests.
+
 ## 2026-08-18 — Add Lowson moving-source convection distance
 
 **Files:** `BladeAD/core/acoustics/convection.py`,

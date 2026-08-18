@@ -108,3 +108,22 @@ def test_hanson_thickness_derivatives():
     )
     assert errors is not None
     recorder.stop()
+
+
+def test_radially_varying_thickness_shape_matches_repeated_common_shape():
+    recorder = csdl.Recorder(inline=True)
+    recorder.start()
+    thickness = csdl.Variable(value=np.array([[0.12, 0.09]]))
+    observer_angle = csdl.Variable(value=np.array([[1.0]]))
+    common_inputs = _inputs(thickness, observer_angle)
+    common = compute_hanson_thickness_noise(**common_inputs)
+    common_shape = common_inputs["normalized_thickness_shape"].value
+    radial_inputs = dict(common_inputs)
+    radial_inputs["normalized_thickness_shape"] = csdl.Variable(
+        value=np.broadcast_to(common_shape, (2, len(common_shape)))
+    )
+    radial = compute_hanson_thickness_noise(**radial_inputs)
+
+    np.testing.assert_allclose(radial.cosine_pressure.value, common.cosine_pressure.value)
+    np.testing.assert_allclose(radial.sine_pressure.value, common.sine_pressure.value)
+    recorder.stop()

@@ -128,6 +128,38 @@ def test_dji_9443_section_polars_match_pinned_flowunsteady_sources():
         assert set(rows[0]) == {"Alpha", "Cl", "Cd", "Cm"}
 
 
+def test_dji_9443_contours_and_bpf2_computational_references_are_complete():
+    fixture = FIXTURES / "dji_9443"
+    contour_hashes = [
+        "24403cb37ac10113eb76e5e81576cd06bf5af0ff1b29892cfa2f19307c0bd0a8",
+        "d18d7f5dff26248de85402eb0a2e68aaaab8fa74b5cfc0d9d10b593a57fe54bc",
+        "40320e04b10349f64eb8ee770a7170b61ed3fd57a404be1cb7b4df8f16e39fa7",
+        "1ac19a5df37906409cf7e7749d694e764ec13514874f8922683b009ad44ee402",
+        "d546470e8cede2d90e272971019c9ea3d891456ee20a86332ca79ed7d853b3af",
+        "74df37decf127a1d90b7233d387f013e2a5c87fb6c12bdf0f0aafd09b9ed28b6",
+    ]
+    for section, expected_hash in enumerate(contour_hashes, start=1):
+        path = fixture / "airfoil_contours" / f"DJI9443-airfoilsec{section}.csv"
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == expected_hash
+        with path.open(newline="") as stream:
+            rows = list(csv.DictReader(stream))
+        assert len(rows) == 81
+        assert set(rows[0]) == {"x/c", "y/c"}
+
+    expected_reference_lengths = {
+        "flowunsteady_reference_bpf2_loading_of2_psw.csv": 83,
+        "flowunsteady_reference_bpf2_loading_pas.csv": 45,
+        "flowunsteady_reference_bpf2_thickness_of2_psw.csv": 37,
+        "flowunsteady_reference_bpf2_thickness_pas.csv": 37,
+        "flowunsteady_reference_bpf2_total_of2_psw.csv": 83,
+        "flowunsteady_reference_bpf2_total_pas.csv": 52,
+    }
+    for filename, expected_length in expected_reference_lengths.items():
+        rows = read_csv("dji_9443", filename)
+        assert len(rows) == expected_length
+        assert set(rows[0]) == {"spl_db", "angle_from_rotor_plane_deg"}
+
+
 def test_dji_9443_generated_model_comparison_is_complete():
     with (REPORTS / "bladead_dji9443_summary.csv").open(newline="") as stream:
         summary = list(csv.DictReader(stream))
@@ -151,10 +183,10 @@ def test_dji_9443_generated_model_comparison_is_complete():
     np.testing.assert_allclose(
         [float(row["harmonic_mae_db"]) for row in summary],
         [
-            6.463037598364946,
-            12.483681616887882,
-            6.855928549645716,
-            12.87657242705989,
+            4.599652805429644,
+            10.922755712038661,
+            4.811878496412129,
+            11.20668853866455,
         ],
     )
     assert all(
@@ -169,11 +201,16 @@ def test_dji_9443_generated_model_comparison_is_complete():
     ]
     np.testing.assert_allclose(
         [
-            float(match["bladead_spl_db"]) - float(base["bladead_spl_db"])
+            float(match["bladead_loading_spl_db"])
+            - float(base["bladead_loading_spl_db"])
             for base, match in zip(geometry, matched)
         ],
         20.0 * np.log10(0.9557745235322783),
         atol=2e-6,
+    )
+    np.testing.assert_allclose(
+        [float(match["bladead_thickness_spl_db"]) for match in matched],
+        [float(base["bladead_thickness_spl_db"]) for base in geometry],
     )
 
 

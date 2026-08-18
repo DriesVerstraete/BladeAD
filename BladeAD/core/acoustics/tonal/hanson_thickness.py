@@ -49,9 +49,18 @@ def compute_hanson_thickness_noise(
     ):
         raise ValueError("All radial arrays must have identical shapes.")
     num_nodes, num_radial = radial_shape
-    num_chordwise = normalized_thickness_shape.shape[0]
-    if len(normalized_thickness_shape.shape) != 1 or num_chordwise < 2:
-        raise ValueError("Normalized thickness shape must be a one-dimensional array.")
+    thickness_shape = normalized_thickness_shape.shape
+    if len(thickness_shape) == 1:
+        num_chordwise = thickness_shape[0]
+    elif len(thickness_shape) == 2 and thickness_shape[0] == num_radial:
+        num_chordwise = thickness_shape[1]
+    else:
+        raise ValueError(
+            "Normalized thickness shape must have shape (chordwise,) or "
+            "(radial, chordwise)."
+        )
+    if num_chordwise < 2:
+        raise ValueError("Normalized thickness shape requires at least two chordwise points.")
     if chordwise_locations.shape != (num_chordwise,):
         raise ValueError("Chordwise locations must match the thickness-shape array.")
     if chordwise_integration_weights.shape != (num_chordwise,):
@@ -122,7 +131,10 @@ def compute_hanson_thickness_noise(
 
     wavenumber = csdl.expand(chordwise_wavenumber, chordwise_target, "iomr->iomrq")
     locations = csdl.expand(chordwise_locations, chordwise_target, "q->iomrq")
-    shape = csdl.expand(normalized_thickness_shape, chordwise_target, "q->iomrq")
+    if len(thickness_shape) == 1:
+        shape = csdl.expand(normalized_thickness_shape, chordwise_target, "q->iomrq")
+    else:
+        shape = csdl.expand(normalized_thickness_shape, chordwise_target, "rq->iomrq")
     chordwise_weights = csdl.expand(
         chordwise_integration_weights, chordwise_target, "q->iomrq"
     )

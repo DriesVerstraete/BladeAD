@@ -54,7 +54,7 @@ must not be interpreted as a resolved physical-angle equivalence.
 | Fixture | Aerodynamic evidence | Acoustic evidence | Current use |
 |---|---|---|---|
 | F8475 D-4 (`F8745-D4` legacy ID) | Table 4 measured thrust and shaft power; prediction matched power coefficient by adjusting blade angle; RCAIDE-generated sectional loads; measurement uncertainty and measured sectional loading not reported | 18 harmonics at 60° and 90° for three cases | Coupled code/experiment diagnostic; legacy RCAIDE conditions differ from Table 4 and must be corrected before physical validation |
-| DJI 9443, 5400 RPM hover | Measured `C_T=0.072`; open chord/twist geometry and seven section polars; BladeAD gives `C_T=0.07533` | Digitized BPF1/BPF2 and OASPL directivity on the corrected 1.905 m observer plane | Coupled loading-noise validation; directivity diagnosis pending |
+| DJI 9443, 5400 RPM hover | Measured `C_T=0.072`; open chord/twist geometry, seven section polars, and six contours; BladeAD gives `C_T=0.07533` | Digitized BPF1/BPF2 and OASPL directivity plus Figure 14 computational components on the corrected 1.905 m observer plane | Coupled tonal validation; BPF2 discrepancy reproduced as a published deterministic-model limitation |
 | APC 11x4 | RCAIDE-generated source state | Total and broadband one-third-octave spectra | Broadband fixture; physical angle mapping remains unresolved |
 
 The F8745 load-sensitivity report shows that ±10% common thrust/torque scaling changes overall
@@ -123,15 +123,21 @@ coupled aeroacoustic result rather than isolated validation of acoustic radiatio
 
 At 5400 RPM, BladeAD with the seven FLOWUnsteady section polars predicts `C_T=0.07533`, 4.63%
 above the measured `C_T=0.072`. Against five digitized observer angles and two blade-passing
-harmonics, Lowson gives a 6.46 dB combined harmonic MAE and -2.10 dB energetic error. Hanson gives
-12.48 dB and -8.12 dB, respectively. Lowson therefore passes the energetic gate but not the
-harmonic gate; BPF1 is close at 3.20 dB MAE, while BPF2 remains the dominant miss at 9.73 dB.
-These loading-only results use the same BEM source; thickness is disabled and measured OASPL is
-excluded because it includes broadband and motor noise. The remaining work is a directivity and
-source-contamination diagnosis rather than aerodynamic-polar closure.
+harmonics, loading-plus-thickness Lowson gives a 4.60 dB combined harmonic MAE and -1.42 dB
+energetic error. Hanson gives 10.92 dB and -7.74 dB, respectively. Lowson passes BPF1 at 1.98 dB
+MAE, while BPF2 remains the dominant miss at 7.22 dB. Measured OASPL is excluded because it
+includes broadband and motor noise.
 
 Scaling both sectional thrust and drag to match measured `C_T` exactly changes every loading-tone
-prediction by -0.393 dB. Lowson's combined MAE becomes 6.86 dB and its energetic error -2.50 dB;
-Hanson becomes 12.88 dB and -8.52 dB. The equal thrust/drag scale is only a diagnostic because
+component by -0.393 dB while leaving thickness unchanged. Lowson's combined MAE becomes 4.81 dB
+and its energetic error -1.75 dB; Hanson becomes 11.21 dB and -8.09 dB. The equal load scale is
+only a diagnostic because
 measured torque is not reported. This bound rules out the residual 4.63% thrust mismatch as the
 cause of the BPF2/directivity failure.
+
+Against the digitized Figure 14 PAS computational curves, BladeAD Lowson BPF2 differs by only
+-0.03 to +1.52 dB across loading, thickness, and total components over their overlapping reported
+angles. PAS itself does not extend loading to +45 degrees and trends downward toward the
+experimental endpoint. The paper reports the same BPF2 experiment/prediction discrepancy and its
+sensitivity to thickness/loading phase. The residual is therefore shared with the published
+deterministic models, not a BladeAD-only radiation error.

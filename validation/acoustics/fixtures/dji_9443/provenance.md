@@ -30,6 +30,13 @@
   `624b38db8cb2b7af25dc4f8c89c74c00ea038a9c3a76552bb4f754bfed72ce1d`,
   `7b2391b57f5ddd560fca732c8e514f09fcb40780e21a632279ce18e729a7f3ca`, and
   `57ed68f0b2a9252fe0257aad5d95ed7e4b30ad08d8114f379c308cb58d9ca74a`.
+- Contour SHA-256 values, for sections 1 through 6, are
+  `24403cb37ac10113eb76e5e81576cd06bf5af0ff1b29892cfa2f19307c0bd0a8`,
+  `d18d7f5dff26248de85402eb0a2e68aaaab8fa74b5cfc0d9d10b593a57fe54bc`,
+  `40320e04b10349f64eb8ee770a7170b61ed3fd57a404be1cb7b4df8f16e39fa7`,
+  `1ac19a5df37906409cf7e7749d694e764ec13514874f8922683b009ad44ee402`,
+  `d546470e8cede2d90e272971019c9ea3d891456ee20a86332ca79ed7d853b3af`, and
+  `74df37decf127a1d90b7233d387f013e2a5c87fb6c12bdf0f0aafd09b9ed28b6`.
 - FLOWUnsteady distributes these files under its MIT licence. The upstream licence and copyright
   notice remain authoritative; this fixture records provenance rather than changing ownership.
 
@@ -64,3 +71,12 @@
   unweighted plotting sections. Its weighting state is therefore unresolved and it is retained
   for diagnostic plotting rather than quantitative acceptance.
 - The private local paper is supporting evidence only and remains excluded from Git.
+- The Figure 14 BPF2 computational references retain separate OF2-PSW/PAS and
+  thickness/loading/total labels. Their upstream SHA-256 values are
+  `84c498feb4ba51a45e7732d6b2bfa86dc447afb79c1733fa747fc71b1cff3f49`,
+  `aa40da6310d4aa2394e0f29afe1a8f0b94690d58734ab20ba13fa215ed2d5eb5`,
+  `1b46929a882187a89dae6dbd0ca390185d1ec36b845e1422f01117b789822ea9`,
+  `c408bf19a2a00ad6aadbaa3ea50ef3e2842c41922354cd1fb4358bd5a6a7236b`,
+  `84617091c4e347bcd2750ff3ca918fe03405d6c82bce6015a338135e31ae2bff`, and
+  `c2275b9d93171d9c92a10ea225efff83b0d0b367cd9cec91470cdaa65ca38b50` in
+  thickness-OF2, thickness-PAS, loading-OF2, loading-PAS, total-OF2, total-PAS order.

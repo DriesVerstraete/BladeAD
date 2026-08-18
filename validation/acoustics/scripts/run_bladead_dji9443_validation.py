@@ -123,6 +123,51 @@ def energetic_spl(values_db):
     return 10.0 * np.log10(np.sum(10.0 ** (np.asarray(values_db) / 10.0)))
 
 
+def thickness_geometry(radial_fraction, hub_fraction, num_chordwise=101):
+    sections = np.genfromtxt(
+        FIXTURE / "airfoil_sections.csv",
+        delimiter=",",
+        names=True,
+        dtype=None,
+        encoding=None,
+    )
+    chordwise = np.linspace(0.0, 1.0, num_chordwise)
+    section_thickness = []
+    for contour_file in sections["contour_file"]:
+        contour = np.genfromtxt(
+            FIXTURE / "airfoil_contours" / contour_file, delimiter=",", names=True
+        )
+        leading_edge = np.argmin(contour["xc"])
+        upper = np.interp(
+            chordwise,
+            contour["xc"][: leading_edge + 1][::-1],
+            contour["yc"][: leading_edge + 1][::-1],
+        )
+        lower = np.interp(
+            chordwise,
+            contour["xc"][leading_edge:],
+            contour["yc"][leading_edge:],
+        )
+        section_thickness.append(np.maximum(upper - lower, 0.0))
+    section_thickness = np.asarray(section_thickness)
+    radial_span = (radial_fraction - hub_fraction) / (1.0 - hub_fraction)
+    radial_thickness = np.column_stack(
+        [
+            np.interp(
+                radial_span,
+                sections["normalized_blade_span"],
+                section_thickness[:, chordwise_index],
+            )
+            for chordwise_index in range(num_chordwise)
+        ]
+    )
+    thickness_to_chord = np.max(radial_thickness, axis=1)
+    normalized_shape = radial_thickness / thickness_to_chord[:, None]
+    weights = np.full(num_chordwise, chordwise[1] - chordwise[0])
+    weights[[0, -1]] *= 0.5
+    return thickness_to_chord, normalized_shape, chordwise - 0.5, weights
+
+
 def evaluate_model(
     tonal_model, match_measured_ct=False, num_radial=40, num_azimuthal=16
 ):
@@ -167,6 +212,9 @@ def evaluate_model(
         * 2.0
         * radius
     )
+    thickness_to_chord, thickness_shape, chordwise_locations, chordwise_weights = (
+        thickness_geometry(radial_fraction, hub_fraction)
+    )
 
     recorder = csdl.Recorder(inline=True)
     recorder.start()
@@ -180,6 +228,10 @@ def evaluate_model(
         num_azimuthal=num_azimuthal,
         num_blades=int(condition["number_of_blades"]),
         norm_hub_radius=hub_fraction,
+        thickness_to_chord=_variable(thickness_to_chord),
+        normalized_thickness_shape=_variable(thickness_shape),
+        thickness_shape_chordwise_locations=_variable(chordwise_locations),
+        thickness_shape_chordwise_weights=_variable(chordwise_weights),
     )
     inputs = RotorAnalysisInputs(
         rpm=_variable([condition["rpm"]]),
@@ -216,7 +268,7 @@ def evaluate_model(
             load_harmonics=(0,),
             tonal_model=tonal_model,
             tonal_enabled=True,
-            thickness_enabled=False,
+            thickness_enabled=True,
             a_weighting_enabled=False,
         ),
     )
@@ -230,6 +282,8 @@ def evaluate_model(
         "geometry_driven_thrust_coefficient": predicted_ct,
         "load_scale": load_scale,
         "tonal_mode_spl": acoustic.tonal_mode_spl.value.copy()[0],
+        "loading_mode_spl": acoustic.loading_mode_spl.value.copy()[0],
+        "thickness_mode_spl": acoustic.thickness_mode_spl.value.copy()[0],
     }
     recorder.stop()
     return result
@@ -269,6 +323,12 @@ def main():
                             "harmonic": int(harmonic),
                             "frequency_hz": frequency,
                             "experimental_spl_db": measured_value,
+                            "bladead_loading_spl_db": result["loading_mode_spl"][
+                                observer_index, int(harmonic) - 1
+                            ],
+                            "bladead_thickness_spl_db": result["thickness_mode_spl"][
+                                observer_index, int(harmonic) - 1
+                            ],
                             "bladead_spl_db": predicted_value,
                             "signed_error_db": error_value,
                         }
@@ -280,7 +340,7 @@ def main():
                     "source_case": result["source_case"],
                     "model": model,
                     "source_model": "flowunsteady_section_polars",
-                    "thickness_enabled": False,
+                    "thickness_enabled": True,
                     "measured_thrust_coefficient": 0.072,
                     "bladead_thrust_coefficient": result["thrust_coefficient"],
                     "load_scale": result["load_scale"],

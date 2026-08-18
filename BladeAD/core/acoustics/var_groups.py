@@ -21,6 +21,7 @@ class AcousticObserverData(csdl.VariableGroup):
 @dataclass
 class RotorAcousticSettings(csdl.VariableGroup):
     modes: Sequence[int] = (1, 2, 3)
+    load_harmonics: Sequence[int] = tuple(range(11))
     tonal_enabled: bool = False
     broadband_enabled: bool = False
     a_weighting_enabled: bool = True
@@ -38,6 +39,9 @@ class RotorAcousticOutputs(csdl.VariableGroup):
     broadband_pressure_squared: Optional[csdl.Variable] = None
     total_pressure_squared: Optional[csdl.Variable] = None
     tonal_spl: Optional[csdl.Variable] = None
+    tonal_mode_spl: Optional[csdl.Variable] = None
+    tonal_cosine_pressure: Optional[csdl.Variable] = None
+    tonal_sine_pressure: Optional[csdl.Variable] = None
     broadband_spl: Optional[csdl.Variable] = None
     total_spl: Optional[csdl.Variable] = None
     total_spl_a_weighted: Optional[csdl.Variable] = None

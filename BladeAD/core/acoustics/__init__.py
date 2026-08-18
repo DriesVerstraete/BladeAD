@@ -4,7 +4,10 @@ from BladeAD.core.acoustics.aggregation import (
 )
 from BladeAD.core.acoustics.api import evaluate_rotor_acoustics
 from BladeAD.core.acoustics.convection import compute_convected_distance
-from BladeAD.core.acoustics.observers import evaluate_observer_geometry
+from BladeAD.core.acoustics.observers import (
+    evaluate_observer_geometry,
+    evaluate_observer_geometry_nodes,
+)
 from BladeAD.core.acoustics.tonal import (
     LoadHarmonics,
     LowsonLoadingPressure,
@@ -34,6 +37,7 @@ __all__ = [
     "synthesize_lowson_rotor_pressure",
     "compute_convected_distance",
     "evaluate_observer_geometry",
+    "evaluate_observer_geometry_nodes",
     "evaluate_rotor_acoustics",
     "pressure_squared_to_spl",
 ]

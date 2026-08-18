@@ -40,7 +40,16 @@ def synthesize_lowson_rotor_pressure(
     mode_pressure_squared = csdl.reshape(
         0.5 * (rotor_cosine**2 + rotor_sine**2), pressure_shape
     )
-    total_pressure_squared = csdl.sum(mode_pressure_squared, axes=(2,))
+    total_shape = pressure_shape[:2]
+    total_pressure_squared = csdl.reshape(
+        csdl.sum(mode_pressure_squared, axes=(2,)), total_shape
+    )
+    total_spl = csdl.reshape(
+        pressure_squared_to_spl(
+            total_pressure_squared, reference_pressure, pressure_squared_floor
+        ),
+        total_shape,
+    )
     return LowsonRotorTonalOutputs(
         rotor_cosine_pressure=rotor_cosine,
         rotor_sine_pressure=rotor_sine,
@@ -49,7 +58,5 @@ def synthesize_lowson_rotor_pressure(
             mode_pressure_squared, reference_pressure, pressure_squared_floor
         ),
         total_pressure_squared=total_pressure_squared,
-        total_spl=pressure_squared_to_spl(
-            total_pressure_squared, reference_pressure, pressure_squared_floor
-        ),
+        total_spl=total_spl,
     )

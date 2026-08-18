@@ -6,6 +6,23 @@ branch). This file logs every local modification, matching the pattern used for 
 (`999-software/rcaide/local-patches.md`) — check here before diffing against upstream or
 investigating "unexpected" BladeAD behavior.
 
+## 2026-08-18 — Connect the real BEM-to-Lowson tonal chain
+
+**Files:** `BladeAD/core/acoustics/api.py`, `BladeAD/core/acoustics/observers.py`,
+`BladeAD/core/acoustics/var_groups.py`, `tests/acoustics/test_tonal_api.py`
+
+**What:** enabled the opt-in tonal API to connect real BEM sectional loads and mesh data through
+Fourier projection, node-dependent observer geometry, moving-source convection, arbitrary-harmonic
+Lowson pressure, coherent rotor synthesis, per-mode/total SPL, and A-weighted total SPL.
+
+**Why:** expose one differentiable production path instead of requiring users to assemble tested
+acoustic primitives manually. The API rejects aliased load-harmonic requests and rotor outputs
+whose load convention is not explicitly complete-rotor.
+
+**Verification:** a real BEM solve feeds the complete tonal API for two acoustic modes and four
+load harmonics; output shapes and finite values are checked, and CSDL derivatives of tonal SPL
+with respect to the observer position are verified by finite difference through the full chain.
+
 ## 2026-08-18 — Add coherent complete-rotor tonal synthesis
 
 **Files:** `BladeAD/core/acoustics/tonal/synthesis.py`,

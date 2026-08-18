@@ -3,7 +3,18 @@ from __future__ import annotations
 import csdl_alpha as csdl
 import numpy as np
 
-from BladeAD.core.acoustics.observers import evaluate_observer_geometry
+from BladeAD.core.acoustics.aggregation import pressure_squared_to_spl
+from BladeAD.core.acoustics.convection import compute_convected_distance
+from BladeAD.core.acoustics.observers import (
+    evaluate_observer_geometry,
+    evaluate_observer_geometry_nodes,
+)
+from BladeAD.core.acoustics.tonal import (
+    compute_load_harmonics,
+    compute_lowson_loading_pressure,
+    synthesize_lowson_rotor_pressure,
+)
+from BladeAD.core.acoustics.weighting import a_weighting_db
 from BladeAD.core.acoustics.var_groups import (
     AcousticObserverData,
     RotorAcousticOutputs,
@@ -18,19 +29,14 @@ def evaluate_rotor_acoustics(
     settings: RotorAcousticSettings | None = None,
 ):
     settings = settings or RotorAcousticSettings()
-    if settings.tonal_enabled or settings.broadband_enabled:
+    if settings.broadband_enabled:
         raise NotImplementedError(
-            "Tonal and broadband models are not available in the acoustic foundation."
+            "Broadband models are not available in the acoustic foundation."
         )
     if not settings.modes or any(int(mode) != mode or mode <= 0 for mode in settings.modes):
         raise ValueError("Acoustic modes must be positive integers.")
 
     mesh = rotor_inputs.mesh_parameters
-    distance, direction, axis_cosine = evaluate_observer_geometry(
-        observers=observers,
-        source_origin=mesh.thrust_origin,
-        thrust_axis=mesh.thrust_vector,
-    )
     rpm = rotor_inputs.rpm
     if not isinstance(rpm, csdl.Variable):
         rpm = csdl.Variable(value=np.asarray(rpm, dtype=float))
@@ -47,9 +53,122 @@ def evaluate_rotor_acoustics(
     modes_expanded = csdl.expand(modes, fundamental_expanded.shape, "j->ij")
     blade_passing_frequencies = fundamental_expanded * modes_expanded
 
+    if not settings.tonal_enabled:
+        distance, direction, axis_cosine = evaluate_observer_geometry(
+            observers=observers,
+            source_origin=mesh.thrust_origin,
+            thrust_axis=mesh.thrust_vector,
+        )
+        return RotorAcousticOutputs(
+            observer_distance=distance,
+            observer_direction=direction,
+            observer_axis_cosine=axis_cosine,
+            blade_passing_frequencies=blade_passing_frequencies,
+        )
+
+    if rotor_outputs is None:
+        raise ValueError("Tonal acoustics require rotor analysis outputs.")
+    required = ("sectional_thrust", "sectional_drag", "radial_stations", "azimuth_angle")
+    if any(getattr(rotor_outputs, name, None) is None for name in required):
+        raise ValueError("Rotor outputs do not expose the required Lowson sectional data.")
+    if rotor_outputs.sectional_loads_include_all_blades is not True:
+        raise ValueError("Lowson integration requires complete-rotor sectional loads.")
+    if any(int(value) != value for value in settings.load_harmonics):
+        raise ValueError("Load harmonics must be integers.")
+    load_harmonics = tuple(int(value) for value in settings.load_harmonics)
+    num_azimuthal = rotor_outputs.sectional_thrust.shape[2]
+    if not load_harmonics or any(value < 0 for value in load_harmonics):
+        raise ValueError("Load harmonics must be non-negative integers.")
+    if len(set(load_harmonics)) != len(load_harmonics):
+        raise ValueError("Load harmonics must be unique.")
+    if max(load_harmonics) > (num_azimuthal - 1) // 2:
+        raise ValueError("Azimuth resolution is insufficient for requested load harmonics.")
+
+    num_nodes = rpm.shape[0]
+    def node_vectors(value):
+        variable = value if isinstance(value, csdl.Variable) else csdl.Variable(value=np.asarray(value))
+        if variable.shape == (3,):
+            return csdl.expand(variable, (num_nodes, 3), "j->ij")
+        if variable.shape != (num_nodes, 3):
+            raise ValueError("Rotor origin and thrust axis must have shape (3,) or (node, 3).")
+        return variable
+
+    origins = node_vectors(mesh.thrust_origin)
+    axes = node_vectors(mesh.thrust_vector)
+    distance, direction, axial_distance, in_plane_distance = evaluate_observer_geometry_nodes(
+        observers, origins, axes
+    )
+    source_velocity = rotor_inputs.mesh_velocity
+    if source_velocity.shape != (num_nodes, 3):
+        raise ValueError("Mesh velocity must have shape (node, 3).")
+    sound_speed = rotor_inputs.atmos_states.speed_of_sound
+    if not isinstance(sound_speed, csdl.Variable):
+        sound_speed = csdl.Variable(value=np.asarray(sound_speed, dtype=float).reshape(-1))
+    if sound_speed.shape == (1,) and num_nodes > 1:
+        sound_speed = csdl.expand(sound_speed, (num_nodes,))
+    if sound_speed.shape != (num_nodes,):
+        raise ValueError("Speed of sound must be scalar or have shape (node,).")
+    convected_distance = compute_convected_distance(
+        distance, direction, source_velocity, sound_speed
+    )
+    coefficients = compute_load_harmonics(
+        rotor_outputs.sectional_thrust,
+        rotor_outputs.sectional_drag,
+        rotor_outputs.azimuth_angle,
+        mesh.num_blades,
+        load_harmonics,
+    )
+    loading_pressure = compute_lowson_loading_pressure(
+        coefficients,
+        rotor_outputs.radial_stations[:, :, 0],
+        rpm * 2.0 * np.pi / 60.0,
+        axial_distance,
+        in_plane_distance,
+        distance,
+        sound_speed,
+        mesh.num_blades,
+        settings.modes,
+        convected_distance,
+    )
+    tonal = synthesize_lowson_rotor_pressure(
+        loading_pressure.cosine_pressure,
+        loading_pressure.sine_pressure,
+        mesh.num_blades,
+        settings.reference_pressure,
+        settings.pressure_squared_floor,
+    )
+    total_spl_a_weighted = None
+    if settings.a_weighting_enabled:
+        weighting = a_weighting_db(blade_passing_frequencies)
+        weighting = csdl.expand(
+            weighting,
+            (num_nodes, distance.shape[1], len(settings.modes)),
+            "im->iom",
+        )
+        weighted_mode_squared = tonal.mode_pressure_squared * csdl.exp(
+            np.log(10.0) / 10.0 * weighting
+        )
+        weighted_total = csdl.reshape(
+            csdl.sum(weighted_mode_squared, axes=(2,)), distance.shape
+        )
+        total_spl_a_weighted = csdl.reshape(
+            pressure_squared_to_spl(
+                weighted_total, settings.reference_pressure, settings.pressure_squared_floor
+            ),
+            distance.shape,
+        )
+
     return RotorAcousticOutputs(
         observer_distance=distance,
         observer_direction=direction,
-        observer_axis_cosine=axis_cosine,
+        observer_axis_cosine=csdl.reshape(axial_distance / distance, distance.shape),
         blade_passing_frequencies=blade_passing_frequencies,
+        tonal_pressure_squared=tonal.total_pressure_squared,
+        total_pressure_squared=tonal.total_pressure_squared,
+        tonal_spl=tonal.total_spl,
+        tonal_mode_spl=tonal.mode_spl,
+        tonal_cosine_pressure=tonal.rotor_cosine_pressure,
+        tonal_sine_pressure=tonal.rotor_sine_pressure,
+        total_spl=tonal.total_spl,
+        total_spl_a_weighted=total_spl_a_weighted,
     )

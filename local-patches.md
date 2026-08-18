@@ -6,6 +6,23 @@ branch). This file logs every local modification, matching the pattern used for 
 (`999-software/rcaide/local-patches.md`) — check here before diffing against upstream or
 investigating "unexpected" BladeAD behavior.
 
+## 2026-08-18 — Freeze the HG-MATLAB combined directivity fixture
+
+**Files:** `validation/acoustics/fixtures/lowson_hg_matlab/`,
+`tests/acoustics/test_hg_fixture.py`
+
+**What:** preserved all 37 HG-MATLAB directivity values and 16 separately labelled experimental
+points from the pinned `lsdo_acoustics` hover verification source, with conditions, provenance,
+known missing metadata, and an explicit scope warning.
+
+**Why:** the upstream curve combines Sears hover loading and Barry–Magliozzi thickness noise. It
+cannot honestly validate a loading-only Lowson kernel; freezing it now prevents later component
+mixing or silent transcription changes.
+
+**Verification:** fixture integrity test checks row counts, the complete angle grid, and selected
+source anchors. The combined curve remains inactive as a model-acceptance test until thickness,
+Sears, and observer-angle conventions are reproduced separately.
+
 ## 2026-08-18 — Connect the real BEM-to-Lowson tonal chain
 
 **Files:** `BladeAD/core/acoustics/api.py`, `BladeAD/core/acoustics/observers.py`,

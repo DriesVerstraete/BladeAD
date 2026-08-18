@@ -13,3 +13,6 @@ Each case directory contains:
 - externally generated predictions in source-labelled NPZ or CSV files.
 
 The initial cases are F8745-D4 for tonal validation and APC 11x4 for broadband validation.
+`lowson_hg_matlab/` preserves a pinned combined Sears-loading plus Barry–Magliozzi thickness
+comparison and its separately labelled experimental points; its README records why the combined
+curve is not yet a loading-only acceptance target.

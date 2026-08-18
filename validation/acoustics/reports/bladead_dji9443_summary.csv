@@ -1,0 +1,3 @@
+model,source_model,thickness_enabled,measured_thrust_coefficient,bladead_thrust_coefficient,harmonic_mae_db,maximum_absolute_error_db,two_harmonic_overall_error_db
+lowson,generic_zero_d_polar,False,0.072,0.08023419483438327,10.431511586532244,41.699772302411816,-3.512437950318187
+hanson_line,generic_zero_d_polar,False,0.072,0.08023419483438327,16.45214696841226,47.72033664375387,-9.533033038668385

@@ -64,21 +64,51 @@ def test_apc_fixture_dimensions_and_reference_values():
     assert broadband[-1]["broadband_spl_db"] == "42.57142"
 
 
-def test_dji_9443_aerodynamic_fixture_is_frozen_and_acoustics_remain_pending():
+def test_dji_9443_acoustic_fixture_is_frozen():
     conditions = read_csv("dji_9443", "operating_conditions.csv")
     chord = read_csv("dji_9443", "chord_distribution.csv")
     twist = read_csv("dji_9443", "twist_distribution.csv")
-    fixture = FIXTURES / "dji_9443"
+    observers = read_csv("dji_9443", "observers.csv")
+    harmonics = read_csv("dji_9443", "experimental_harmonics.csv")
+    narrowband = read_csv("dji_9443", "experimental_narrowband_spectrum.csv")
+    one_third_octave = read_csv("dji_9443", "experimental_one_third_octave_spectrum.csv")
+    oaspl = read_csv("dji_9443", "experimental_oaspl.csv")
 
     assert len(conditions) == 1
     assert len(chord) == 26
     assert len(twist) == 42
+    assert len(observers) == 5
+    assert len(harmonics) == 10
+    assert len(narrowband) == 296
+    assert len(one_third_octave) == 26
+    assert len(oaspl) == 5
     assert float(conditions[0]["rpm"]) == 5400.0
+    assert float(conditions[0]["observer_radius_m"]) == 1.905
     assert float(conditions[0]["measured_thrust_coefficient"]) == 0.072
     assert float(chord[-1]["radius_over_tip_radius"]) == 1.0
     assert float(twist[-1]["radius_over_tip_radius"]) == 1.0
-    assert not (fixture / "experimental_harmonics.csv").exists()
-    assert "not yet transcribed" in (fixture / "provenance.md").read_text()
+    np.testing.assert_allclose(
+        [float(row["reported_angle_from_rotor_plane_deg"]) for row in observers],
+        [-45.0, -22.5, 0.0, 22.5, 45.0],
+    )
+    assert harmonics[0]["spl_db"] == "47.6377952755906"
+    assert harmonics[-1]["spl_db"] == "22.50000000000003"
+
+
+def test_dji_9443_generated_model_comparison_is_complete():
+    with (REPORTS / "bladead_dji9443_summary.csv").open(newline="") as stream:
+        summary = list(csv.DictReader(stream))
+    with (REPORTS / "bladead_dji9443_detailed.csv").open(newline="") as stream:
+        detail = list(csv.DictReader(stream))
+
+    assert [row["model"] for row in summary] == ["lowson", "hanson_line"]
+    assert len(detail) == 20
+    assert {int(row["harmonic"]) for row in detail} == {1, 2}
+    np.testing.assert_allclose(
+        [float(row["harmonic_mae_db"]) for row in summary],
+        [10.431511586532244, 16.45214696841226],
+    )
+    assert all(row["source_model"] == "generic_zero_d_polar" for row in summary)
 
 
 def test_rcaide_baseline_archives_are_complete_and_pinned():

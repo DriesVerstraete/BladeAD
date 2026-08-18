@@ -14,17 +14,38 @@
 
 - FLOWUnsteady's public MIT-licensed DJI 9443 rotor database, ultimately sourced from the
   Zawodny et al. rotor geometry.
+- Source repository commit: `b7283db2e94a5f44a7ef2d57f223b0bdb8d0dec7`.
 - The raw chord and twist stations below were previously transcribed into the SPL project's
   `validate_dji9443_hover.py` and independently exercised at 5400 RPM.
 
-## Current fixture boundary
+## Acoustic transcription
 
-- Rotor radius, hub radius, blade count, chord, twist, RPM, density, and measured
-  `C_T = 0.072` are frozen here.
-- Experimental narrowband spectrum, BPF1/BPF2 directivity, OASPL directivity, microphone
-  coordinates, acoustic normalization, and measurement uncertainty are **not yet transcribed**.
-- This is therefore an aerodynamic-source fixture and provenance anchor, not yet an executable
-  acoustic validation fixture. No BladeAD tonal-accuracy claim may use it until those missing
-  primary-source quantities are digitized and independently checked.
-- FLOWUnsteady's current documentation warns that the original 2020 broadband comparison used
-  the wrong microphone plane. Only the corrected current tutorial data may be accepted.
+- The experimental BPF1/BPF2 and OASPL points are transcribed from the current FLOWUnsteady
+  digitizations of Zawodny et al. Figures 14 and 12, respectively.
+- Upstream file SHA-256 values are `97b6e2c73aa4c66a93d021c60afdcccbffeb4548cd6ce30ceac78d803ced8ccd`
+  (BPF1), `d3984a6cb8975e51438cab5f939d72a2aaf31cf65952f6c153c8e91394abe3d2`
+  (BPF2), and `dac1be65126b84ad4b19b58b761a6960ad303682b1bb90edf90c6e13334a72ea`
+  (OASPL).
+- The -45-degree narrowband and one-third-octave source hashes are
+  `caa410d6c622cb1f2058ed4452dbfca04e698b41164499c20321e505df86ffc5` and
+  `6deea070044d5eb0c34773c21e0141eb8ac9e70af4b18097d55f77b0828e8000`.
+- The current FLOWUnsteady tutorial uses a 1.905 m circular microphone array, 5400 RPM,
+  density 1.071778 kg/m3, dynamic viscosity 1.85508e-5 Pa s, and sound speed 342.35 m/s.
+- Observer angles are measured from the rotor plane, with +90 degrees upstream. The runner maps
+  upstream onto BladeAD's positive thrust-vector axis; this reverses FLOWUnsteady's plotted
+  x-axis orientation without changing the reported observer angles.
+- FLOWUnsteady warns that an older broadband comparison used the wrong microphone plane. These
+  fixture files use only the corrected current tutorial data.
+
+## Interpretation boundary
+
+- Rotor radius, hub radius, blade count, chord, twist, RPM, atmosphere, observer geometry, and
+  measured `C_T = 0.072` are frozen here.
+- The published directivity points are digitized rather than tabulated; digitization uncertainty
+  and measurement uncertainty are not reported in the recovered machine-readable sources.
+- OASPL includes broadband rotor and motor noise and must not be used as the acceptance target
+  for loading-only tonal models. BPF1/BPF2 are the tonal comparison quantities.
+- The current FLOWUnsteady tutorial uses the same narrowband digitization in A-weighted and
+  unweighted plotting sections. Its weighting state is therefore unresolved and it is retained
+  for diagnostic plotting rather than quantitative acceptance.
+- The private local paper is supporting evidence only and remains excluded from Git.

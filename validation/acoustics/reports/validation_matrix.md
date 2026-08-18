@@ -54,7 +54,7 @@ must not be interpreted as a resolved physical-angle equivalence.
 | Fixture | Aerodynamic evidence | Acoustic evidence | Current use |
 |---|---|---|---|
 | F8475 D-4 (`F8745-D4` legacy ID) | Table 4 measured thrust and shaft power; prediction matched power coefficient by adjusting blade angle; RCAIDE-generated sectional loads; measurement uncertainty and measured sectional loading not reported | 18 harmonics at 60° and 90° for three cases | Coupled code/experiment diagnostic; legacy RCAIDE conditions differ from Table 4 and must be corrected before physical validation |
-| DJI 9443, 5400 RPM hover | Measured `C_T=0.072`; open chord/twist geometry; published blade-loading comparison | Narrowband spectrum and directivity transcription pending | Aerodynamic-source fixture only |
+| DJI 9443, 5400 RPM hover | Measured `C_T=0.072`; open chord/twist geometry; current generic-polar BladeAD source gives `C_T=0.08023` | Digitized BPF1/BPF2 and OASPL directivity on the corrected 1.905 m observer plane | Coupled loading-noise validation; source-polar closure pending |
 | APC 11x4 | RCAIDE-generated source state | Total and broadband one-third-octave spectra | Broadband fixture; physical angle mapping remains unresolved |
 
 The F8745 load-sensitivity report shows that ±10% common thrust/torque scaling changes overall
@@ -118,3 +118,14 @@ at 60 degrees. Neither Hanson nor RCAIDE should be treated as validation truth.
 After matching measured shaft power, RCAIDE predicts thrust high by 30.64%, 12.82%, and 19.26%;
 BladeAD predicts it high by 23.21%, 7.32%, and 12.19%. Acoustic agreement therefore remains a
 coupled aeroacoustic result rather than isolated validation of acoustic radiation alone.
+
+## DJI 9443 corrected-observer model comparison
+
+At 5400 RPM, the geometry-driven BladeAD source predicts `C_T=0.08023`, 11.44% above the measured
+`C_T=0.072`. Against five digitized observer angles and two blade-passing harmonics, Lowson gives
+a 10.43 dB combined harmonic MAE and -3.51 dB energetic error. Hanson gives 16.45 dB and -9.53 dB,
+respectively. Neither passes the frozen tonal criteria. BPF2 is the dominant miss, with MAEs of
+15.02 dB for Lowson and 21.04 dB for Hanson. These loading-only results use the same BEM source;
+thickness is disabled and measured OASPL is excluded because it includes broadband and motor
+noise. The seven published low-Reynolds-number sectional polars must be represented before the
+remaining error can be attributed cleanly to acoustic radiation.

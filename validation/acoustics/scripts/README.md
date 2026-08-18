@@ -103,3 +103,13 @@ python run_rcaide_f8475_corrected_validation.py --rcaide-root /path/to/RCAIDE_LE
 
 Run `run_bladead_f8475_lowson_validation.py` in the `rotor_design` environment, then merge Lowson,
 Hanson, and RCAIDE results with `compare_f8475_corrected_models.py`.
+
+Run the DJI 9443 corrected-observer loading-noise comparison with:
+
+```bash
+python -u run_bladead_dji9443_validation.py
+```
+
+This uses the published rotor geometry and the digitized Zawodny BPF1/BPF2 directivity at 5400
+RPM. Lowson and Hanson receive identical BEM loads and observer coordinates with thickness
+disabled. The generic ZeroD polar and resulting thrust-coefficient error are reported limitations.

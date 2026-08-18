@@ -95,6 +95,10 @@ def test_dji_9443_acoustic_fixture_is_frozen():
         [3317, 13131, 28404, 41039, 44913, 42526, 22978],
     )
     np.testing.assert_allclose(
+        [float(row["normalized_blade_span"]) for row in airfoil_sections],
+        [0.0, 0.0857143, 0.185714, 0.371429, 0.714286, 0.942857, 1.0],
+    )
+    np.testing.assert_allclose(
         [float(row["reported_angle_from_rotor_plane_deg"]) for row in observers],
         [-45.0, -22.5, 0.0, 22.5, 45.0],
     )
@@ -135,9 +139,11 @@ def test_dji_9443_generated_model_comparison_is_complete():
     assert {int(row["harmonic"]) for row in detail} == {1, 2}
     np.testing.assert_allclose(
         [float(row["harmonic_mae_db"]) for row in summary],
-        [10.431511586532244, 16.45214696841226],
+        [6.463037598364946, 12.483681616887882],
     )
-    assert all(row["source_model"] == "generic_zero_d_polar" for row in summary)
+    assert all(
+        row["source_model"] == "flowunsteady_section_polars" for row in summary
+    )
 
 
 def test_rcaide_baseline_archives_are_complete_and_pinned():

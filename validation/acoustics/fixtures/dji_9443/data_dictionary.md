@@ -3,8 +3,9 @@
 - `operating_conditions.csv`: frozen 5400 RPM hover condition and measured thrust coefficient.
 - `chord_distribution.csv`: raw nondimensional chord stations, `c/R` versus `r/R`.
 - `twist_distribution.csv`: raw blade twist in degrees versus `r/R`.
-- `airfoil_sections.csv`: FLOWUnsteady radial mapping from blade stations to contour and polar
-  files, with the filename-encoded Reynolds number made explicit.
+- `airfoil_sections.csv`: FLOWUnsteady normalized hub-to-tip span mapping from blade stations to
+  contour and polar files, with the filename-encoded Reynolds number made explicit. The upstream
+  header says `r/R`, but its implementation maps position `p` to `(Rhub + p*(Rtip-Rhub))/Rtip`.
 - `airfoil_polars/`: seven unchanged FLOWUnsteady section tables containing angle of attack,
   lift coefficient, drag coefficient, and pitching-moment coefficient.
 - `LICENSE_FLOWUNSTEADY.txt`: upstream MIT licence and copyright notice covering the imported

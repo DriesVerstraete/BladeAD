@@ -14,29 +14,30 @@
 
 `run_bladead_dji9443_validation.py` evaluates the same BladeAD BEM loads and observer grid with
 Lowson and Hanson loading-noise models. Thickness is disabled in both calculations to isolate a
-like-for-like loading-source comparison. The current run uses the project's generic ZeroD polar;
-the seven source-rotor low-Reynolds-number section polars are not yet represented in BladeAD.
+like-for-like loading-source comparison. The current run linearly interpolates the seven
+FLOWUnsteady low-Reynolds-number section polars in angle of attack and normalized blade span,
+matching FLOWUnsteady's executable hub-to-tip mapping convention.
 
-BladeAD predicts `C_T = 0.08023` against the measured `C_T = 0.072`, an 11.44% overprediction.
+BladeAD predicts `C_T = 0.07533` against the measured `C_T = 0.072`, a 4.63% overprediction.
 This is therefore a coupled aeroacoustic result rather than isolated acoustic validation.
 
 ## Results
 
 | Model | BPF1 MAE (dB) | BPF2 MAE (dB) | Combined MAE (dB) | Maximum error (dB) | Two-harmonic energetic error (dB) |
 |---|---:|---:|---:|---:|---:|
-| Lowson | 5.85 | 15.02 | 10.43 | 41.70 | -3.51 |
-| Hanson | 11.87 | 21.04 | 16.45 | 47.72 | -9.53 |
+| Lowson | 3.20 | 9.73 | 6.46 | 22.77 | -2.10 |
+| Hanson | 9.22 | 15.75 | 12.48 | 28.79 | -8.12 |
 
-Neither model passes the frozen 3 dB overall and harmonic-MAE criteria. Lowson is consistently
-closer and remains the primary model, but its BPF2 directivity collapses toward the +45-degree
-observer. Hanson is approximately 6.02 dB below Lowson at every point, consistent with a fixed
-pressure-amplitude convention difference in this loading-only axisymmetric case; it does not fix
-the directivity trend.
+Neither model passes both frozen criteria. Lowson passes the energetic criterion at -2.10 dB and
+nearly passes BPF1 at 3.20 dB MAE, but its BPF2 directivity still collapses toward the +45-degree
+observer. Hanson is approximately 6.02 dB below Lowson at every point and does not fix the
+directivity trend.
 
 The experiment identifies motor noise as material. Its contribution at the blade-passing tones,
 particularly near a rotor-loading directivity null, is not separately reported in the recovered
 data and is therefore an unresolved alternative explanation for part of the measured level.
 
-The next diagnostic is source-model closure: represent or fit the seven published DJI sectional
-polars, re-run BEM, and determine how much of the tonal error remains after the measured thrust
-coefficient is reproduced. No acceptance threshold should be changed.
+Using the real section polars reduced the thrust-coefficient error from 11.44% to 4.63%, Lowson's
+combined MAE from 10.43 to 6.46 dB, and its energetic error from -3.51 to -2.10 dB. The next
+diagnostic is therefore the remaining radiation/directivity formulation and possible motor-tone
+contamination, not further tuning of the frozen acceptance threshold.

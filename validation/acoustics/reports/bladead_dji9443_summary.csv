@@ -1,3 +1,3 @@
 model,source_model,thickness_enabled,measured_thrust_coefficient,bladead_thrust_coefficient,harmonic_mae_db,maximum_absolute_error_db,two_harmonic_overall_error_db
-lowson,generic_zero_d_polar,False,0.072,0.08023419483438327,10.431511586532244,41.699772302411816,-3.512437950318187
-hanson_line,generic_zero_d_polar,False,0.072,0.08023419483438327,16.45214696841226,47.72033664375387,-9.533033038668385
+lowson,flowunsteady_section_polars,False,0.072,0.07533157478806603,6.463037598364946,22.765323041875092,-2.103472756934785
+hanson_line,flowunsteady_section_polars,False,0.072,0.07533157478806603,12.483681616887882,28.786188126493688,-8.124068768661154

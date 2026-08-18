@@ -12,10 +12,6 @@ from BladeAD.core.acoustics import (
     RotorAcousticSettings,
     evaluate_rotor_acoustics,
 )
-from BladeAD.core.airfoil.zero_d_airfoil_model import (
-    ZeroDAirfoilModel,
-    ZeroDAirfoilPolarParameters,
-)
 from BladeAD.utils.var_groups import AtmosStates, RotorAnalysisInputs, RotorMeshParameters
 
 
@@ -28,20 +24,99 @@ def _variable(value):
     return csdl.Variable(value=np.asarray(value, dtype=float))
 
 
-def fallback_airfoil_model():
-    return ZeroDAirfoilModel(
-        ZeroDAirfoilPolarParameters(
-            alpha_stall_minus=-10.0,
-            alpha_stall_plus=15.0,
-            Cl_stall_minus=-1.0,
-            Cl_stall_plus=1.5,
-            Cd_stall_minus=0.02,
-            Cd_stall_plus=0.06,
-            Cl_0=0.5,
-            Cd_0=0.008,
-            Cl_alpha=5.1566,
+class RadiallyInterpolatedPolarOperation(csdl.CustomExplicitOperation):
+    def __init__(self, radial_span, section_span, polars):
+        self.radial_span = radial_span
+        self.section_span = section_span
+        self.polars = polars
+        super().__init__()
+
+    @staticmethod
+    def _interpolate_polar(alpha, polar, coefficient):
+        alpha_table = np.deg2rad(polar["Alpha"])
+        values = polar[coefficient]
+        prediction = np.interp(alpha, alpha_table, values)
+        intervals = np.searchsorted(alpha_table, alpha, side="right") - 1
+        intervals = np.clip(intervals, 0, len(alpha_table) - 2)
+        slopes = np.diff(values) / np.diff(alpha_table)
+        derivative = slopes[intervals]
+        derivative = np.where(
+            (alpha < alpha_table[0]) | (alpha > alpha_table[-1]), 0.0, derivative
         )
-    )
+        return prediction, derivative
+
+    def _predict(self, alpha):
+        cl = np.zeros_like(alpha)
+        cd = np.zeros_like(alpha)
+        dcl = np.zeros_like(alpha)
+        dcd = np.zeros_like(alpha)
+        for radial_index, span in enumerate(self.radial_span):
+            upper = np.searchsorted(self.section_span, span, side="right")
+            upper = np.clip(upper, 1, len(self.section_span) - 1)
+            lower = upper - 1
+            denominator = self.section_span[upper] - self.section_span[lower]
+            weight = (span - self.section_span[lower]) / denominator
+            section_alpha = alpha[:, radial_index, :]
+            cl_lower, dcl_lower = self._interpolate_polar(
+                section_alpha, self.polars[lower], "Cl"
+            )
+            cl_upper, dcl_upper = self._interpolate_polar(
+                section_alpha, self.polars[upper], "Cl"
+            )
+            cd_lower, dcd_lower = self._interpolate_polar(
+                section_alpha, self.polars[lower], "Cd"
+            )
+            cd_upper, dcd_upper = self._interpolate_polar(
+                section_alpha, self.polars[upper], "Cd"
+            )
+            cl[:, radial_index, :] = (1.0 - weight) * cl_lower + weight * cl_upper
+            cd[:, radial_index, :] = (1.0 - weight) * cd_lower + weight * cd_upper
+            dcl[:, radial_index, :] = (1.0 - weight) * dcl_lower + weight * dcl_upper
+            dcd[:, radial_index, :] = (1.0 - weight) * dcd_lower + weight * dcd_upper
+        return cl, cd, dcl, dcd
+
+    def evaluate(self, alpha):
+        self.declare_input("alpha", alpha)
+        indices = np.arange(np.prod(alpha.shape))
+        cl = self.create_output("Cl", alpha.shape)
+        cd = self.create_output("Cd", alpha.shape)
+        self.declare_derivative_parameters("Cl", "alpha", rows=indices, cols=indices)
+        self.declare_derivative_parameters("Cd", "alpha", rows=indices, cols=indices)
+        return cl, cd
+
+    def compute(self, input_vals, output_vals):
+        cl, cd, _, _ = self._predict(input_vals["alpha"])
+        output_vals["Cl"] = cl
+        output_vals["Cd"] = cd
+
+    def compute_derivatives(self, inputs, outputs, derivatives):
+        _, _, dcl, dcd = self._predict(inputs["alpha"])
+        derivatives["Cl", "alpha"] = dcl.ravel()
+        derivatives["Cd", "alpha"] = dcd.ravel()
+
+
+class DJI9443TabulatedAirfoilModel:
+    def __init__(self, radial_fraction, hub_fraction):
+        sections = np.genfromtxt(
+            FIXTURE / "airfoil_sections.csv",
+            delimiter=",",
+            names=True,
+            dtype=None,
+            encoding=None,
+        )
+        self.radial_span = (radial_fraction - hub_fraction) / (1.0 - hub_fraction)
+        self.section_span = sections["normalized_blade_span"]
+        self.polars = [
+            np.genfromtxt(
+                FIXTURE / "airfoil_polars" / polar_file, delimiter=",", names=True
+            )
+            for polar_file in sections["polar_file"]
+        ]
+
+    def evaluate(self, alpha, Re, Ma):
+        return RadiallyInterpolatedPolarOperation(
+            self.radial_span, self.section_span, self.polars
+        ).evaluate(alpha)
 
 
 def energetic_spl(values_db):
@@ -49,9 +124,15 @@ def energetic_spl(values_db):
 
 
 def evaluate_model(tonal_model, num_radial=40, num_azimuthal=16):
-    condition = np.genfromtxt(FIXTURE / "operating_conditions.csv", delimiter=",", names=True)
-    chord_source = np.genfromtxt(FIXTURE / "chord_distribution.csv", delimiter=",", names=True)
-    twist_source = np.genfromtxt(FIXTURE / "twist_distribution.csv", delimiter=",", names=True)
+    condition = np.genfromtxt(
+        FIXTURE / "operating_conditions.csv", delimiter=",", names=True
+    )
+    chord_source = np.genfromtxt(
+        FIXTURE / "chord_distribution.csv", delimiter=",", names=True
+    )
+    twist_source = np.genfromtxt(
+        FIXTURE / "twist_distribution.csv", delimiter=",", names=True
+    )
     observers = np.genfromtxt(FIXTURE / "observers.csv", delimiter=",", names=True)
     radius = float(condition["tip_radius_m"])
     hub_fraction = float(condition["hub_radius_m"] / radius)
@@ -71,7 +152,11 @@ def evaluate_model(tonal_model, num_radial=40, num_azimuthal=16):
     angles = np.deg2rad(observers["reported_angle_from_rotor_plane_deg"])
     observer_radius = observers["radius_m"]
     observer_positions = np.column_stack(
-        (observer_radius * np.sin(angles), observer_radius * np.cos(angles), np.zeros(5))
+        (
+            observer_radius * np.sin(angles),
+            observer_radius * np.cos(angles),
+            np.zeros(5),
+        )
     )
     axial_velocity = (
         float(condition["advance_ratio"])
@@ -107,7 +192,7 @@ def evaluate_model(tonal_model, num_radial=40, num_azimuthal=16):
     )
     bem = BEMModel(
         num_nodes=1,
-        airfoil_model=fallback_airfoil_model(),
+        airfoil_model=DJI9443TabulatedAirfoilModel(radial_fraction, hub_fraction),
         integration_scheme="trapezoidal",
     ).evaluate(inputs)
     acoustic = evaluate_rotor_acoustics(
@@ -138,7 +223,9 @@ def evaluate_model(tonal_model, num_radial=40, num_azimuthal=16):
 
 
 def main():
-    experimental = np.genfromtxt(FIXTURE / "experimental_harmonics.csv", delimiter=",", names=True)
+    experimental = np.genfromtxt(
+        FIXTURE / "experimental_harmonics.csv", delimiter=",", names=True
+    )
     angles = np.array([-45.0, -22.5, 0.0, 22.5, 45.0])
     detailed_rows = []
     summary_rows = []
@@ -174,7 +261,7 @@ def main():
         summary_rows.append(
             {
                 "model": model,
-                "source_model": "generic_zero_d_polar",
+                "source_model": "flowunsteady_section_polars",
                 "thickness_enabled": False,
                 "measured_thrust_coefficient": 0.072,
                 "bladead_thrust_coefficient": result["thrust_coefficient"],

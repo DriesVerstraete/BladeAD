@@ -1,4 +1,4 @@
-radius_over_tip_radius,contour_file,polar_file,reynolds_number
+normalized_blade_span,contour_file,polar_file,reynolds_number
 0.0,DJI9443-airfoilsec6.csv,dji9443-sec1-Re3317-smooth00.csv,3317
 0.0857143,DJI9443-airfoilsec6.csv,dji9443-sec2-Re13131-smooth00.csv,13131
 0.185714,DJI9443-airfoilsec4.csv,dji9443-sec3-Re28404-smooth00.csv,28404

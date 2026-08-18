@@ -19,6 +19,9 @@
   `validate_dji9443_hover.py` and independently exercised at 5400 RPM.
 - The seven source polar tables and their radial mapping are now frozen under `airfoil_polars/`
   and `airfoil_sections.csv`. They are copied from FLOWUnsteady without numerical alteration.
+- FLOWUnsteady treats the mapping coordinate as normalized span from hub to tip and converts it
+  with `(Rhub + position*(Rtip-Rhub))/Rtip`; the normalized fixture column records this executable
+  convention rather than preserving the upstream CSV's misleading `r/R` label.
 - Polar SHA-256 values, in section order, are:
   `831fadfdf98315d07b47f2f70077ab7c64ae60c4b0723023a2e463aa38adec97`,
   `8a75dc4a31cd9daf0a16925e89c8bd40da41b55851f507263952fa524a9b3d8b`,

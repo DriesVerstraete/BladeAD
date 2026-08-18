@@ -5,9 +5,10 @@
   their Figure 6 and carry plot-resolution uncertainty.
 - `operating_conditions.csv`: measured nondimensional conditions from Delfs et al. Table 1.
 - `observers.csv`: the unambiguous reference microphone in the propeller plane at 4 m.
-- `experimental_harmonics.csv`: the first six measured blade-passing harmonics digitized from
-  the uncalibrated square-tip panel of Delfs et al. Figure 7. Its abscissa is `nB`; with two
-  blades, plotted positions 2, 4, ..., 12 map to BPF harmonics 1, 2, ..., 6.
+- `experimental_harmonics.csv`: measured blade-passing harmonics digitized from the uncalibrated
+  square-tip panel of Delfs et al. Figure 7. Its abscissa is `nB`; with two blades, plotted
+  positions 2, 4, ... map to BPF harmonics 1, 2, .... AC-2 remains above the 60 dB plot floor
+  through BPF24; BC-4 remains above it through BPF13.
 
 All SPL values are unweighted dB re 20 micropascals. The fixture is intended for a tonal
 loading-plus-thickness comparison, not a broadband or directivity validation.

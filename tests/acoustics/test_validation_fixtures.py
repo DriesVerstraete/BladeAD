@@ -229,8 +229,17 @@ def test_hartzell_f9684_fixture_and_generated_comparison_are_complete():
             "angle_from_propeller_axis_deg": "90.0",
         }
     ]
-    assert len(harmonics) == 12
-    assert {int(row["bpf_harmonic"]) for row in harmonics} == set(range(1, 7))
+    assert len(harmonics) == 37
+    assert {
+        int(row["bpf_harmonic"])
+        for row in harmonics
+        if row["case"] == "BC-4"
+    } == set(range(1, 14))
+    assert {
+        int(row["bpf_harmonic"])
+        for row in harmonics
+        if row["case"] == "AC-2"
+    } == set(range(1, 25))
     np.testing.assert_allclose(
         [float(row["tip_mach"]) for row in conditions], [0.661, 0.751]
     )
@@ -240,8 +249,8 @@ def test_hartzell_f9684_fixture_and_generated_comparison_are_complete():
     np.testing.assert_allclose(
         [float(row["power_coefficient"]) for row in conditions], [0.0553, 0.0611]
     )
-    assert harmonics[0]["spl_db"] == "106.8"
-    assert harmonics[-1]["spl_db"] == "99.7"
+    assert harmonics[0]["spl_db"] == "108.8"
+    assert harmonics[-1]["spl_db"] == "65.4"
 
     with (REPORTS / "bladead_f9684_summary.csv").open(newline="") as stream:
         summary = list(csv.DictReader(stream))
@@ -250,19 +259,41 @@ def test_hartzell_f9684_fixture_and_generated_comparison_are_complete():
     with (REPORTS / "bladead_f9684_aerodynamics.csv").open(newline="") as stream:
         aerodynamics = list(csv.DictReader(stream))
 
-    assert [(row["case"], row["model"]) for row in summary] == [
-        ("BC-4", "lowson"),
-        ("BC-4", "hanson_line"),
-        ("AC-2", "lowson"),
-        ("AC-2", "hanson_line"),
+    assert [
+        (row["case"], row["model"], row["evaluation_band"]) for row in summary
+    ] == [
+        ("BC-4", "lowson", "bpf1_6"),
+        ("BC-4", "lowson", "all_available"),
+        ("BC-4", "hanson_line", "bpf1_6"),
+        ("BC-4", "hanson_line", "all_available"),
+        ("AC-2", "lowson", "bpf1_6"),
+        ("AC-2", "lowson", "all_available"),
+        ("AC-2", "hanson_line", "bpf1_6"),
+        ("AC-2", "hanson_line", "all_available"),
     ]
-    assert len(detail) == 24
+    assert len(detail) == 74
     assert len(aerodynamics) == 2
     assert summary[0]["passes_frozen_gate"] == "True"
-    assert all(row["passes_frozen_gate"] == "False" for row in summary[1:])
+    assert summary[1]["passes_frozen_gate"] == "True"
+    assert summary[4]["passes_frozen_gate"] == "True"
+    assert summary[5]["passes_frozen_gate"] == "True"
+    assert all(
+        row["passes_frozen_gate"] == "False"
+        for row in summary
+        if row["model"] == "hanson_line"
+    )
     np.testing.assert_allclose(
         [float(row["harmonic_mae_db"]) for row in summary],
-        [2.410834612941379, 5.425983359828526, 3.120097947755634, 4.995082290552301],
+        [
+            1.573102406887789,
+            1.7185790988765899,
+            9.309316693161854,
+            10.376679628146197,
+            1.64728815634178,
+            2.31787209971945,
+            9.11174895721897,
+            12.041403316817844,
+        ],
     )
     np.testing.assert_allclose(
         [float(row["target_thrust_n"]) for row in aerodynamics],

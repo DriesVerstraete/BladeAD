@@ -55,7 +55,7 @@ must not be interpreted as a resolved physical-angle equivalence.
 |---|---|---|---|
 | F8475 D-4 (`F8745-D4` legacy ID) | Table 4 measured thrust and shaft power; prediction matched power coefficient by adjusting blade angle; RCAIDE-generated sectional loads; measurement uncertainty and measured sectional loading not reported | 18 harmonics at 60° and 90° for three cases | Coupled code/experiment diagnostic; legacy RCAIDE conditions differ from Table 4 and must be corrected before physical validation |
 | DJI 9443, 5400 RPM hover | Measured `C_T=0.072`; open chord/twist geometry, seven section polars, and six contours; BladeAD gives `C_T=0.07533` | Digitized BPF1/BPF2 and OASPL directivity plus Figure 14 computational components on the corrected 1.905 m observer plane | Coupled tonal validation; BPF2 discrepancy reproduced as a published deterministic-model limitation |
-| Hartzell F-9684-14 BC-4/AC-2 | Published `C_T`, `C_P`, atmosphere, and digitized square-tip geometry; BEM radial loads scaled independently to measured integrated thrust and power | First six BPF harmonics at the unambiguous 4 m in-plane DNW reference microphone | Third-geometry tonal validation; Lowson passes BC-4 and narrowly misses AC-2 |
+| Hartzell F-9684-14 BC-4/AC-2 | Published `C_T`, `C_P`, atmosphere, and digitized square-tip geometry; BEM radial loads scaled independently to measured integrated thrust and power | BPF1--13/24 at the unambiguous 4 m in-plane DNW reference microphone | Third-geometry tonal validation; Lowson passes both frozen BPF1--6 gates and the same numerical criteria over all available harmonics |
 | APC 11x4 | RCAIDE-generated source state | Total and broadband one-third-octave spectra | Broadband fixture; physical angle mapping remains unresolved |
 
 The F8745 load-sensitivity report shows that ±10% common thrust/torque scaling changes overall
@@ -151,7 +151,10 @@ re-analysis of the same DNW F-9684-14 experiment: BC-4 and AC-2 at the unambiguo
 reference microphone, with published atmosphere and measured `C_T`/`C_P`. BEM supplies radial
 load shape and its sectional thrust/drag are scaled independently to those measured integrals.
 
-Lowson passes BC-4 with 2.41 dB harmonic MAE and +1.94 dB energetic error. It narrowly misses
-AC-2 with 3.12 dB MAE and +3.64 dB energetic error. Hanson misses both cases, with 5.00--5.43 dB
-MAE and -4.48 to -5.73 dB energetic error. This third geometry independently reinforces Lowson as
-the primary model, but AC-2 means the multi-case experimental tonal gate is not fully cleared.
+High-resolution symbol extraction corrected the initial full-page visual transcription. Lowson
+passes the frozen BPF1--6 gate for BC-4 with 1.57 dB harmonic MAE and -0.61 dB energetic error,
+and for AC-2 with 1.65 dB MAE and -0.26 dB energetic error. Across every published point above
+the 60 dB plot floor, Lowson gives 1.72 dB MAE through BC-4 BPF13 and 2.32 dB through AC-2 BPF24;
+energetic errors remain -0.62 and -0.51 dB. Hanson misses both and rolls off much too rapidly.
+The third geometry therefore clears its documented tonal criteria and independently reinforces
+Lowson as the primary model.

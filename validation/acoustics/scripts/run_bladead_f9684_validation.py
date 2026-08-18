@@ -44,7 +44,9 @@ def _atmosphere(density, speed_of_sound):
     return temperature, viscosity
 
 
-def evaluate_case(condition, tonal_model, num_radial=40, num_azimuthal=16):
+def evaluate_case(
+    condition, tonal_model, max_harmonic, num_radial=40, num_azimuthal=16
+):
     source_geometry = np.genfromtxt(FIXTURE / "geometry.csv", delimiter=",", names=True)
     radial_fraction = np.linspace(0.2, 0.99, num_radial)
     chord = RADIUS_M * np.interp(
@@ -141,7 +143,7 @@ def evaluate_case(condition, tonal_model, num_radial=40, num_azimuthal=16):
         bem,
         AcousticObserverData(positions=_variable([[0.0, 4.0, 0.0]])),
         RotorAcousticSettings(
-            modes=tuple(range(1, 7)),
+            modes=tuple(range(1, max_harmonic + 1)),
             load_harmonics=(0,),
             tonal_model=tonal_model,
             tonal_enabled=True,
@@ -186,28 +188,37 @@ def main():
     aerodynamic = []
     for condition in conditions:
         case = condition["case"]
-        measured = experimental[experimental["case"] == case]["spl_db"]
+        selected = experimental[experimental["case"] == case]
+        harmonics = selected["bpf_harmonic"]
+        measured = selected["spl_db"]
+        max_harmonic = int(np.max(harmonics))
         for model in ("lowson", "hanson_line"):
-            result = evaluate_case(condition, model)
+            result = evaluate_case(condition, model, max_harmonic)
             predicted = result["total_spl"]
-            error = predicted - measured
-            summary.append(
-                {
-                    "case": case,
-                    "model": model,
-                    "harmonic_mae_db": np.mean(np.abs(error)),
-                    "maximum_absolute_error_db": np.max(np.abs(error)),
-                    "overall_error_db": energetic_spl(predicted)
-                    - energetic_spl(measured),
-                    "passes_frozen_gate": bool(
-                        np.mean(np.abs(error)) <= 3.0
-                        and abs(energetic_spl(predicted) - energetic_spl(measured))
-                        <= 3.0
-                    ),
-                }
-            )
+            for band, count in (("bpf1_6", 6), ("all_available", len(measured))):
+                band_measured = measured[:count]
+                band_predicted = predicted[:count]
+                error = band_predicted - band_measured
+                overall_error = energetic_spl(band_predicted) - energetic_spl(
+                    band_measured
+                )
+                summary.append(
+                    {
+                        "case": case,
+                        "model": model,
+                        "evaluation_band": band,
+                        "last_harmonic": count,
+                        "harmonic_mae_db": np.mean(np.abs(error)),
+                        "maximum_absolute_error_db": np.max(np.abs(error)),
+                        "overall_error_db": overall_error,
+                        "passes_frozen_gate": bool(
+                            np.mean(np.abs(error)) <= 3.0
+                            and abs(overall_error) <= 3.0
+                        ),
+                    }
+                )
             for harmonic, measured_value, predicted_value, loading, thickness in zip(
-                range(1, 7),
+                harmonics,
                 measured,
                 predicted,
                 result["loading_spl"],
@@ -217,7 +228,7 @@ def main():
                     {
                         "case": case,
                         "model": model,
-                        "harmonic": harmonic,
+                        "harmonic": int(harmonic),
                         "experimental_spl_db": measured_value,
                         "bladead_loading_spl_db": loading,
                         "bladead_thickness_spl_db": thickness,
@@ -252,26 +263,34 @@ def main():
     lines = [
         "# BladeAD Hartzell F-9684-14 tonal validation",
         "",
-        "The frozen comparison uses the first six measured BPF harmonics at the DNW reference",
+        "The frozen gate uses the first six measured BPF harmonics at the DNW reference",
         "microphone in the propeller plane, 4 m from the axis. BEM supplies radial load shape;",
         "sectional thrust and drag are independently scaled so their integrals reproduce measured",
         "`C_T` and `C_P`. Lowson and Hanson use identical aerodynamic sources and geometry.",
         "",
-        "| Case | Model | Harmonic MAE | Maximum error | Overall error | Gate |",
-        "|---|---|---:|---:|---:|---|",
+        "| Case | Model | Band | Harmonic MAE | Maximum error | Overall error | Gate |",
+        "|---|---|---|---:|---:|---:|---|",
     ]
     for row in summary:
         lines.append(
-            f"| {row['case']} | {row['model']} | {row['harmonic_mae_db']:.2f} dB | "
+            f"| {row['case']} | {row['model']} | {row['evaluation_band']} | "
+            f"{row['harmonic_mae_db']:.2f} dB | "
             f"{row['maximum_absolute_error_db']:.2f} dB | {row['overall_error_db']:+.2f} dB | "
             f"{'pass' if row['passes_frozen_gate'] else 'fail'} |"
         )
     lines.extend(
         [
             "",
-            "The frozen gate remains harmonic MAE <= 3 dB and absolute energetic overall error",
-            "<= 3 dB. Figure-digitization uncertainty and the absence of measured sectional loads",
-            "remain explicit source limitations; they are not reasons to relax the gate.",
+            "The frozen gate remains BPF1--6 harmonic MAE <= 3 dB and absolute energetic overall",
+            "error <= 3 dB. The all-available rows diagnose higher-harmonic roll-off and do not",
+            "retroactively change that gate. Figure-digitization uncertainty and the absence of",
+            "measured sectional loads remain explicit source limitations.",
+            "",
+            "Lowson retains the measured higher-harmonic roll-off: its all-available MAE remains",
+            "1.72 dB through BC-4 BPF13 and 2.32 dB through AC-2 BPF24. Hanson instead falls",
+            "progressively below the data, qualitatively resembling the excessive post-BPF6",
+            "roll-off reported for the compact Shahjahan model. The higher harmonics barely alter",
+            "the energetic totals because the first few tones dominate them.",
         ]
     )
     (REPORTS / "bladead_f9684_validation.md").write_text("\n".join(lines) + "\n")

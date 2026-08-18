@@ -27,8 +27,11 @@ observer would require an unsupported assumption.
 - Table values are transcribed directly. RPM and dimensional thrust/power are reconstructed from
   the published nondimensional coefficients, diameter, density, and speed of sound.
 - Figure 6 geometry is exact only at the labelled/table anchors. Inboard radial geometry and the
-  first six Figure 7 experimental harmonics are manual plot digitizations, nominally to about
-  1 dB in SPL.
+  Figure 7 experimental harmonics are plot digitizations, nominally to about 1 dB in SPL.
+- The initial 2026-08-19 commit transcribed the first six symbols by visual inspection of a full
+  page and placed several values too low. The follow-up high-resolution extraction calibrated the
+  plot axes and sampled the coloured symbol pixels directly. It corrects BPF1--6 and extends AC-2
+  through BPF24 and BC-4 through BPF13; no values are extrapolated below the 60 dB plot floor.
 - The paper states that the sections correspond essentially to Clark-Y profiles. BladeAD uses its
   existing Clark-Y polar; Reynolds-number variation is not represented.
 - The runner scales BEM sectional thrust and drag independently to the measured `C_T` and `C_P`.

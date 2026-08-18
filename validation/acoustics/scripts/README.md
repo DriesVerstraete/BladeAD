@@ -123,5 +123,6 @@ python -u run_bladead_f9684_validation.py
 
 This evaluates the BC-4 and AC-2 square-tip cases at the DNW 4 m in-plane reference microphone.
 BladeAD BEM supplies the radial load distribution; sectional thrust and drag are independently
-scaled to the measured `C_T` and `C_P` before identical Lowson and Hanson evaluations. The report
-records the digitized-geometry and digitized-spectrum limitations.
+scaled to the measured `C_T` and `C_P` before identical Lowson and Hanson evaluations. The frozen
+gate covers BPF1--6, while the higher-harmonic diagnostic extends through BPF13 for BC-4 and BPF24
+for AC-2. The report records the digitized-geometry and digitized-spectrum limitations.

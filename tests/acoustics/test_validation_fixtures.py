@@ -1,4 +1,5 @@
 import csv
+import hashlib
 from pathlib import Path
 
 import numpy as np
@@ -68,6 +69,7 @@ def test_dji_9443_acoustic_fixture_is_frozen():
     conditions = read_csv("dji_9443", "operating_conditions.csv")
     chord = read_csv("dji_9443", "chord_distribution.csv")
     twist = read_csv("dji_9443", "twist_distribution.csv")
+    airfoil_sections = read_csv("dji_9443", "airfoil_sections.csv")
     observers = read_csv("dji_9443", "observers.csv")
     harmonics = read_csv("dji_9443", "experimental_harmonics.csv")
     narrowband = read_csv("dji_9443", "experimental_narrowband_spectrum.csv")
@@ -77,6 +79,7 @@ def test_dji_9443_acoustic_fixture_is_frozen():
     assert len(conditions) == 1
     assert len(chord) == 26
     assert len(twist) == 42
+    assert len(airfoil_sections) == 7
     assert len(observers) == 5
     assert len(harmonics) == 10
     assert len(narrowband) == 296
@@ -88,11 +91,37 @@ def test_dji_9443_acoustic_fixture_is_frozen():
     assert float(chord[-1]["radius_over_tip_radius"]) == 1.0
     assert float(twist[-1]["radius_over_tip_radius"]) == 1.0
     np.testing.assert_allclose(
+        [float(row["reynolds_number"]) for row in airfoil_sections],
+        [3317, 13131, 28404, 41039, 44913, 42526, 22978],
+    )
+    np.testing.assert_allclose(
         [float(row["reported_angle_from_rotor_plane_deg"]) for row in observers],
         [-45.0, -22.5, 0.0, 22.5, 45.0],
     )
     assert harmonics[0]["spl_db"] == "47.6377952755906"
     assert harmonics[-1]["spl_db"] == "22.50000000000003"
+
+
+def test_dji_9443_section_polars_match_pinned_flowunsteady_sources():
+    fixture = FIXTURES / "dji_9443"
+    sections = read_csv("dji_9443", "airfoil_sections.csv")
+    expected_hashes = [
+        "831fadfdf98315d07b47f2f70077ab7c64ae60c4b0723023a2e463aa38adec97",
+        "8a75dc4a31cd9daf0a16925e89c8bd40da41b55851f507263952fa524a9b3d8b",
+        "5cc924814c04302cfabbf1b539b51a6b7aad61b6a4d55a31ee3d41befca96a62",
+        "ad6f314a308a85939dad81ba77a63d467aa34d1cca6c95382911e28b9341a273",
+        "624b38db8cb2b7af25dc4f8c89c74c00ea038a9c3a76552bb4f754bfed72ce1d",
+        "7b2391b57f5ddd560fca732c8e514f09fcb40780e21a632279ce18e729a7f3ca",
+        "57ed68f0b2a9252fe0257aad5d95ed7e4b30ad08d8114f379c308cb58d9ca74a",
+    ]
+
+    for section, expected_hash in zip(sections, expected_hashes):
+        path = fixture / "airfoil_polars" / section["polar_file"]
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == expected_hash
+        with path.open(newline="") as stream:
+            rows = list(csv.DictReader(stream))
+        assert rows
+        assert set(rows[0]) == {"Alpha", "Cl", "Cd", "Cm"}
 
 
 def test_dji_9443_generated_model_comparison_is_complete():

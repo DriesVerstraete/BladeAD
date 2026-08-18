@@ -3,6 +3,12 @@
 - `operating_conditions.csv`: frozen 5400 RPM hover condition and measured thrust coefficient.
 - `chord_distribution.csv`: raw nondimensional chord stations, `c/R` versus `r/R`.
 - `twist_distribution.csv`: raw blade twist in degrees versus `r/R`.
+- `airfoil_sections.csv`: FLOWUnsteady radial mapping from blade stations to contour and polar
+  files, with the filename-encoded Reynolds number made explicit.
+- `airfoil_polars/`: seven unchanged FLOWUnsteady section tables containing angle of attack,
+  lift coefficient, drag coefficient, and pitching-moment coefficient.
+- `LICENSE_FLOWUNSTEADY.txt`: upstream MIT licence and copyright notice covering the imported
+  FLOWUnsteady data.
 - `observers.csv`: nominal and digitized microphone angles measured from the rotor plane.
 - `experimental_harmonics.csv`: digitized experimental BPF1 and BPF2 directivity levels.
 - `experimental_narrowband_spectrum.csv`: digitized experimental spectrum at -45 degrees.

@@ -17,6 +17,18 @@
 - Source repository commit: `b7283db2e94a5f44a7ef2d57f223b0bdb8d0dec7`.
 - The raw chord and twist stations below were previously transcribed into the SPL project's
   `validate_dji9443_hover.py` and independently exercised at 5400 RPM.
+- The seven source polar tables and their radial mapping are now frozen under `airfoil_polars/`
+  and `airfoil_sections.csv`. They are copied from FLOWUnsteady without numerical alteration.
+- Polar SHA-256 values, in section order, are:
+  `831fadfdf98315d07b47f2f70077ab7c64ae60c4b0723023a2e463aa38adec97`,
+  `8a75dc4a31cd9daf0a16925e89c8bd40da41b55851f507263952fa524a9b3d8b`,
+  `5cc924814c04302cfabbf1b539b51a6b7aad61b6a4d55a31ee3d41befca96a62`,
+  `ad6f314a308a85939dad81ba77a63d467aa34d1cca6c95382911e28b9341a273`,
+  `624b38db8cb2b7af25dc4f8c89c74c00ea038a9c3a76552bb4f754bfed72ce1d`,
+  `7b2391b57f5ddd560fca732c8e514f09fcb40780e21a632279ce18e729a7f3ca`, and
+  `57ed68f0b2a9252fe0257aad5d95ed7e4b30ad08d8114f379c308cb58d9ca74a`.
+- FLOWUnsteady distributes these files under its MIT licence. The upstream licence and copyright
+  notice remain authoritative; this fixture records provenance rather than changing ownership.
 
 ## Acoustic transcription
 

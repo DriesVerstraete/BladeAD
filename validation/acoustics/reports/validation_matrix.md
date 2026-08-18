@@ -129,3 +129,9 @@ harmonic gate; BPF1 is close at 3.20 dB MAE, while BPF2 remains the dominant mis
 These loading-only results use the same BEM source; thickness is disabled and measured OASPL is
 excluded because it includes broadband and motor noise. The remaining work is a directivity and
 source-contamination diagnosis rather than aerodynamic-polar closure.
+
+Scaling both sectional thrust and drag to match measured `C_T` exactly changes every loading-tone
+prediction by -0.393 dB. Lowson's combined MAE becomes 6.86 dB and its energetic error -2.50 dB;
+Hanson becomes 12.88 dB and -8.52 dB. The equal thrust/drag scale is only a diagnostic because
+measured torque is not reported. This bound rules out the residual 4.63% thrust mismatch as the
+cause of the BPF2/directivity failure.

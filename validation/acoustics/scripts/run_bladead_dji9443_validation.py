@@ -123,7 +123,9 @@ def energetic_spl(values_db):
     return 10.0 * np.log10(np.sum(10.0 ** (np.asarray(values_db) / 10.0)))
 
 
-def evaluate_model(tonal_model, num_radial=40, num_azimuthal=16):
+def evaluate_model(
+    tonal_model, match_measured_ct=False, num_radial=40, num_azimuthal=16
+):
     condition = np.genfromtxt(
         FIXTURE / "operating_conditions.csv", delimiter=",", names=True
     )
@@ -195,6 +197,16 @@ def evaluate_model(tonal_model, num_radial=40, num_azimuthal=16):
         airfoil_model=DJI9443TabulatedAirfoilModel(radial_fraction, hub_fraction),
         integration_scheme="trapezoidal",
     ).evaluate(inputs)
+    n = float(condition["rpm"]) / 60.0
+    diameter = 2.0 * radius
+    thrust = float(bem.total_thrust.value[0])
+    predicted_ct = thrust / (
+        float(condition["density_kg_per_m3"]) * n**2 * diameter**4
+    )
+    measured_ct = float(condition["measured_thrust_coefficient"])
+    load_scale = measured_ct / predicted_ct if match_measured_ct else 1.0
+    bem.sectional_thrust = bem.sectional_thrust * load_scale
+    bem.sectional_drag = bem.sectional_drag * load_scale
     acoustic = evaluate_rotor_acoustics(
         inputs,
         bem,
@@ -208,14 +220,15 @@ def evaluate_model(tonal_model, num_radial=40, num_azimuthal=16):
             a_weighting_enabled=False,
         ),
     )
-    n = float(condition["rpm"]) / 60.0
-    diameter = 2.0 * radius
-    thrust = float(bem.total_thrust.value[0])
     result = {
         "model": tonal_model,
+        "source_case": (
+            "measured_ct_load_scaled" if match_measured_ct else "geometry_driven"
+        ),
         "thrust_n": thrust,
-        "thrust_coefficient": thrust
-        / (float(condition["density_kg_per_m3"]) * n**2 * diameter**4),
+        "thrust_coefficient": measured_ct if match_measured_ct else predicted_ct,
+        "geometry_driven_thrust_coefficient": predicted_ct,
+        "load_scale": load_scale,
         "tonal_mode_spl": acoustic.tonal_mode_spl.value.copy()[0],
     }
     recorder.stop()
@@ -229,48 +242,56 @@ def main():
     angles = np.array([-45.0, -22.5, 0.0, 22.5, 45.0])
     detailed_rows = []
     summary_rows = []
-    for model in ("lowson", "hanson_line"):
-        result = evaluate_model(model)
-        errors = []
-        for observer_index, angle in enumerate(angles):
-            selected = experimental[experimental["observer_angle_reported_deg"] == angle]
-            measured = selected["spl_db"]
-            predicted = result["tonal_mode_spl"][observer_index]
-            error = predicted - measured
-            errors.extend(error)
-            for harmonic, frequency, measured_value, predicted_value, error_value in zip(
-                selected["harmonic"],
-                selected["frequency_hz"],
-                measured,
-                predicted,
-                error,
-            ):
-                detailed_rows.append(
-                    {
-                        "model": model,
-                        "observer_angle_from_rotor_plane_deg": angle,
-                        "harmonic": int(harmonic),
-                        "frequency_hz": frequency,
-                        "experimental_spl_db": measured_value,
-                        "bladead_spl_db": predicted_value,
-                        "signed_error_db": error_value,
-                    }
-                )
-        measured_all = experimental["spl_db"].reshape(2, 5).T
-        predicted_all = result["tonal_mode_spl"]
-        summary_rows.append(
-            {
-                "model": model,
-                "source_model": "flowunsteady_section_polars",
-                "thickness_enabled": False,
-                "measured_thrust_coefficient": 0.072,
-                "bladead_thrust_coefficient": result["thrust_coefficient"],
-                "harmonic_mae_db": np.mean(np.abs(errors)),
-                "maximum_absolute_error_db": np.max(np.abs(errors)),
-                "two_harmonic_overall_error_db": energetic_spl(predicted_all.ravel())
-                - energetic_spl(measured_all.ravel()),
-            }
-        )
+    for match_measured_ct in (False, True):
+        for model in ("lowson", "hanson_line"):
+            result = evaluate_model(model, match_measured_ct=match_measured_ct)
+            errors = []
+            for observer_index, angle in enumerate(angles):
+                selected = experimental[
+                    experimental["observer_angle_reported_deg"] == angle
+                ]
+                measured = selected["spl_db"]
+                predicted = result["tonal_mode_spl"][observer_index]
+                error = predicted - measured
+                errors.extend(error)
+                for harmonic, frequency, measured_value, predicted_value, error_value in zip(
+                    selected["harmonic"],
+                    selected["frequency_hz"],
+                    measured,
+                    predicted,
+                    error,
+                ):
+                    detailed_rows.append(
+                        {
+                            "source_case": result["source_case"],
+                            "model": model,
+                            "observer_angle_from_rotor_plane_deg": angle,
+                            "harmonic": int(harmonic),
+                            "frequency_hz": frequency,
+                            "experimental_spl_db": measured_value,
+                            "bladead_spl_db": predicted_value,
+                            "signed_error_db": error_value,
+                        }
+                    )
+            measured_all = experimental["spl_db"].reshape(2, 5).T
+            predicted_all = result["tonal_mode_spl"]
+            summary_rows.append(
+                {
+                    "source_case": result["source_case"],
+                    "model": model,
+                    "source_model": "flowunsteady_section_polars",
+                    "thickness_enabled": False,
+                    "measured_thrust_coefficient": 0.072,
+                    "bladead_thrust_coefficient": result["thrust_coefficient"],
+                    "load_scale": result["load_scale"],
+                    "harmonic_mae_db": np.mean(np.abs(errors)),
+                    "maximum_absolute_error_db": np.max(np.abs(errors)),
+                    "two_harmonic_overall_error_db": energetic_spl(
+                        predicted_all.ravel()
+                    )
+                    - energetic_spl(measured_all.ravel()),
+                }
+            )
     for path, rows in (
         (REPORTS / "bladead_dji9443_detailed.csv", detailed_rows),
         (REPORTS / "bladead_dji9443_summary.csv", summary_rows),

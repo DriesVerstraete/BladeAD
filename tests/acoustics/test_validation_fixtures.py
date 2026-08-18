@@ -134,15 +134,46 @@ def test_dji_9443_generated_model_comparison_is_complete():
     with (REPORTS / "bladead_dji9443_detailed.csv").open(newline="") as stream:
         detail = list(csv.DictReader(stream))
 
-    assert [row["model"] for row in summary] == ["lowson", "hanson_line"]
-    assert len(detail) == 20
+    assert [row["model"] for row in summary] == [
+        "lowson",
+        "hanson_line",
+        "lowson",
+        "hanson_line",
+    ]
+    assert [row["source_case"] for row in summary] == [
+        "geometry_driven",
+        "geometry_driven",
+        "measured_ct_load_scaled",
+        "measured_ct_load_scaled",
+    ]
+    assert len(detail) == 40
     assert {int(row["harmonic"]) for row in detail} == {1, 2}
     np.testing.assert_allclose(
         [float(row["harmonic_mae_db"]) for row in summary],
-        [6.463037598364946, 12.483681616887882],
+        [
+            6.463037598364946,
+            12.483681616887882,
+            6.855928549645716,
+            12.87657242705989,
+        ],
     )
     assert all(
         row["source_model"] == "flowunsteady_section_polars" for row in summary
+    )
+    np.testing.assert_allclose(float(summary[2]["bladead_thrust_coefficient"]), 0.072)
+    np.testing.assert_allclose(float(summary[2]["load_scale"]), 0.9557745235322783)
+
+    geometry = [row for row in detail if row["source_case"] == "geometry_driven"]
+    matched = [
+        row for row in detail if row["source_case"] == "measured_ct_load_scaled"
+    ]
+    np.testing.assert_allclose(
+        [
+            float(match["bladead_spl_db"]) - float(base["bladead_spl_db"])
+            for base, match in zip(geometry, matched)
+        ],
+        20.0 * np.log10(0.9557745235322783),
+        atol=2e-6,
     )
 
 

@@ -1,3 +1,5 @@
-model,source_model,thickness_enabled,measured_thrust_coefficient,bladead_thrust_coefficient,harmonic_mae_db,maximum_absolute_error_db,two_harmonic_overall_error_db
-lowson,flowunsteady_section_polars,False,0.072,0.07533157478806603,6.463037598364946,22.765323041875092,-2.103472756934785
-hanson_line,flowunsteady_section_polars,False,0.072,0.07533157478806603,12.483681616887882,28.786188126493688,-8.124068768661154
+source_case,model,source_model,thickness_enabled,measured_thrust_coefficient,bladead_thrust_coefficient,load_scale,harmonic_mae_db,maximum_absolute_error_db,two_harmonic_overall_error_db
+geometry_driven,lowson,flowunsteady_section_polars,False,0.072,0.07533157478806603,1.0,6.463037598364946,22.765323041875092,-2.103472756934785
+geometry_driven,hanson_line,flowunsteady_section_polars,False,0.072,0.07533157478806603,1.0,12.483681616887882,28.786188126493688,-8.124068768661154
+measured_ct_load_scaled,lowson,flowunsteady_section_polars,False,0.072,0.072,0.9557745235322783,6.855928549645716,23.158213603072284,-2.496363755226355
+measured_ct_load_scaled,hanson_line,flowunsteady_section_polars,False,0.072,0.072,0.9557745235322783,12.87657242705989,29.17907737623549,-8.51695976688697

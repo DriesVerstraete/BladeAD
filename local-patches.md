@@ -6,6 +6,21 @@ branch). This file logs every local modification, matching the pattern used for 
 (`999-software/rcaide/local-patches.md`) — check here before diffing against upstream or
 investigating "unexpected" BladeAD behavior.
 
+## 2026-08-18 — Add coherent complete-rotor tonal synthesis
+
+**Files:** `BladeAD/core/acoustics/tonal/synthesis.py`,
+`tests/acoustics/test_synthesis.py`
+
+**What:** added coherent blade-amplitude synthesis at acoustic orders `n = mode * B`, per-mode
+mean-square pressure and SPL, and energetic summation across distinct tonal frequencies.
+
+**Why:** the paragraph following equation (11) of Lowson and Ollerhead states that blade-passing
+harmonics add, which requires a factor of `B` in pressure amplitude (and therefore `B^2` in
+mean-square pressure), rather than energetic addition of independent blade SPLs.
+
+**Verification:** analytic pressure and SPL comparisons, an explicit `20 log10(B)` coherent-gain
+test, and CSDL derivative verification from total SPL to per-blade pressure.
+
 ## 2026-08-18 — Add arbitrary-harmonic Lowson loading pressure
 
 **Files:** `BladeAD/core/acoustics/tonal/loading.py`,

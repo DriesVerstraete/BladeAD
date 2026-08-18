@@ -8,8 +8,10 @@ from BladeAD.core.acoustics.observers import evaluate_observer_geometry
 from BladeAD.core.acoustics.tonal import (
     LoadHarmonics,
     LowsonLoadingPressure,
+    LowsonRotorTonalOutputs,
     compute_load_harmonics,
     compute_lowson_loading_pressure,
+    synthesize_lowson_rotor_pressure,
 )
 from BladeAD.core.acoustics.var_groups import (
     AcousticObserverData,
@@ -22,12 +24,14 @@ __all__ = [
     "AcousticObserverData",
     "LoadHarmonics",
     "LowsonLoadingPressure",
+    "LowsonRotorTonalOutputs",
     "RotorAcousticOutputs",
     "RotorAcousticSettings",
     "a_weighting_db",
     "energetic_sum",
     "compute_load_harmonics",
     "compute_lowson_loading_pressure",
+    "synthesize_lowson_rotor_pressure",
     "compute_convected_distance",
     "evaluate_observer_geometry",
     "evaluate_rotor_acoustics",

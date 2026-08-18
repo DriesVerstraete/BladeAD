@@ -30,6 +30,7 @@ def test_real_bem_to_lowson_tonal_api_and_observer_derivative():
         num_azimuthal=8,
         num_blades=2,
         norm_hub_radius=0.25,
+        thickness_to_chord=csdl.Variable(value=np.full(num_radial, 0.12)),
     )
     inputs = RotorAnalysisInputs(
         rpm=csdl.Variable(value=np.array([1800.0])),
@@ -63,6 +64,7 @@ def test_real_bem_to_lowson_tonal_api_and_observer_derivative():
             modes=(1, 2),
             load_harmonics=(0, 1, 2, 3),
             tonal_enabled=True,
+            thickness_enabled=True,
             broadband_enabled=False,
         ),
     )
@@ -70,10 +72,21 @@ def test_real_bem_to_lowson_tonal_api_and_observer_derivative():
     assert acoustic_outputs.tonal_mode_spl.shape == (1, 1, 2)
     assert acoustic_outputs.tonal_spl.shape == (1, 1)
     assert acoustic_outputs.total_spl_a_weighted.shape == (1, 1)
+    assert acoustic_outputs.thickness_spl.shape == (1, 1)
+    assert acoustic_outputs.loading_spl.shape == (1, 1)
+    assert acoustic_outputs.loading_mode_spl.shape == (1, 1, 2)
     assert np.all(np.isfinite(acoustic_outputs.tonal_spl.value))
     np.testing.assert_allclose(
         acoustic_outputs.total_pressure_squared.value,
         acoustic_outputs.tonal_pressure_squared.value,
+    )
+    assert np.all(
+        acoustic_outputs.total_pressure_squared.value
+        > acoustic_outputs.loading_pressure_squared.value
+    )
+    assert np.all(
+        acoustic_outputs.tonal_mode_spl.value
+        > acoustic_outputs.loading_mode_spl.value
     )
     errors = csdl.derivative_utils.verify_derivatives(
         [acoustic_outputs.tonal_spl],

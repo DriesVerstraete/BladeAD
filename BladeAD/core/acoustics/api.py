@@ -11,6 +11,7 @@ from BladeAD.core.acoustics.observers import (
 )
 from BladeAD.core.acoustics.tonal import (
     compute_load_harmonics,
+    compute_barry_magliozzi_thickness_noise,
     compute_lowson_loading_pressure,
     synthesize_lowson_rotor_pressure,
 )
@@ -29,6 +30,8 @@ def evaluate_rotor_acoustics(
     settings: RotorAcousticSettings | None = None,
 ):
     settings = settings or RotorAcousticSettings()
+    if settings.thickness_enabled and not settings.tonal_enabled:
+        raise ValueError("Thickness noise requires tonal acoustics to be enabled.")
     if settings.broadband_enabled:
         raise NotImplementedError(
             "Broadband models are not available in the acoustic foundation."
@@ -137,6 +140,64 @@ def evaluate_rotor_acoustics(
         settings.reference_pressure,
         settings.pressure_squared_floor,
     )
+    combined_mode_squared = tonal.mode_pressure_squared
+    thickness = None
+    if settings.thickness_enabled:
+        if mesh.thickness_to_chord is None:
+            raise ValueError("Thickness noise requires mesh thickness_to_chord data.")
+
+        def node_radial(value, name):
+            variable = value if isinstance(value, csdl.Variable) else csdl.Variable(value=np.asarray(value))
+            if variable.shape == (mesh.num_radial,):
+                return csdl.expand(variable, (num_nodes, mesh.num_radial), "r->ir")
+            if variable.shape != (num_nodes, mesh.num_radial):
+                raise ValueError(f"{name} must have shape (radial,) or (node, radial).")
+            return variable
+
+        density = rotor_inputs.atmos_states.density
+        if not isinstance(density, csdl.Variable):
+            density = csdl.Variable(value=np.asarray(density, dtype=float).reshape(-1))
+        if density.shape == (1,) and num_nodes > 1:
+            density = csdl.expand(density, (num_nodes,))
+        if density.shape != (num_nodes,):
+            raise ValueError("Density must be scalar or have shape (node,).")
+        velocity_squared = csdl.sum(source_velocity**2, axes=(1,))
+        mach_number = csdl.sqrt(velocity_squared + 1.0e-24) / sound_speed
+        thickness = compute_barry_magliozzi_thickness_noise(
+            rotor_outputs.radial_stations[:, :, 0],
+            rotor_outputs.radial_element_width[:, :, 0],
+            node_radial(mesh.chord_profile, "Chord profile"),
+            node_radial(mesh.thickness_to_chord, "Thickness-to-chord profile"),
+            rpm * 2.0 * np.pi / 60.0,
+            axial_distance,
+            in_plane_distance,
+            distance,
+            density,
+            sound_speed,
+            mach_number,
+            mesh.num_blades,
+            settings.modes,
+            settings.reference_pressure,
+            settings.pressure_squared_floor,
+        )
+        combined_mode_squared = tonal.mode_pressure_squared + thickness.mode_pressure_squared
+
+    combined_total_squared = csdl.reshape(
+        csdl.sum(combined_mode_squared, axes=(2,)), distance.shape
+    )
+    combined_mode_spl = pressure_squared_to_spl(
+        combined_mode_squared,
+        settings.reference_pressure,
+        settings.pressure_squared_floor,
+    )
+    combined_total_spl = csdl.reshape(
+        pressure_squared_to_spl(
+            combined_total_squared,
+            settings.reference_pressure,
+            settings.pressure_squared_floor,
+        ),
+        distance.shape,
+    )
     total_spl_a_weighted = None
     if settings.a_weighting_enabled:
         weighting = a_weighting_db(blade_passing_frequencies)
@@ -145,7 +206,7 @@ def evaluate_rotor_acoustics(
             (num_nodes, distance.shape[1], len(settings.modes)),
             "im->iom",
         )
-        weighted_mode_squared = tonal.mode_pressure_squared * csdl.exp(
+        weighted_mode_squared = combined_mode_squared * csdl.exp(
             np.log(10.0) / 10.0 * weighting
         )
         weighted_total = csdl.reshape(
@@ -163,12 +224,18 @@ def evaluate_rotor_acoustics(
         observer_direction=direction,
         observer_axis_cosine=csdl.reshape(axial_distance / distance, distance.shape),
         blade_passing_frequencies=blade_passing_frequencies,
-        tonal_pressure_squared=tonal.total_pressure_squared,
-        total_pressure_squared=tonal.total_pressure_squared,
-        tonal_spl=tonal.total_spl,
-        tonal_mode_spl=tonal.mode_spl,
+        tonal_pressure_squared=combined_total_squared,
+        total_pressure_squared=combined_total_squared,
+        tonal_spl=combined_total_spl,
+        loading_pressure_squared=tonal.total_pressure_squared,
+        loading_spl=tonal.total_spl,
+        loading_mode_spl=tonal.mode_spl,
+        thickness_pressure_squared=None if thickness is None else thickness.total_pressure_squared,
+        thickness_spl=None if thickness is None else thickness.total_spl,
+        thickness_mode_spl=None if thickness is None else thickness.mode_spl,
+        tonal_mode_spl=combined_mode_spl,
         tonal_cosine_pressure=tonal.rotor_cosine_pressure,
         tonal_sine_pressure=tonal.rotor_sine_pressure,
-        total_spl=tonal.total_spl,
+        total_spl=combined_total_spl,
         total_spl_a_weighted=total_spl_a_weighted,
     )

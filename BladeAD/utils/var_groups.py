@@ -41,6 +41,7 @@ class RotorMeshParameters(csdl.VariableGroup):
     num_azimuthal: int
     num_blades: int
     norm_hub_radius: float = 0.2
+    thickness_to_chord: Optional[Union[np.ndarray, csdl.Variable]] = None
 
 
 @dataclass

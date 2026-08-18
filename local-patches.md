@@ -6,6 +6,22 @@ branch). This file logs every local modification, matching the pattern used for 
 (`999-software/rcaide/local-patches.md`) — check here before diffing against upstream or
 investigating "unexpected" BladeAD behavior.
 
+## 2026-08-18 — Integrate thickness noise into the tonal API
+
+**Files:** `BladeAD/core/acoustics/api.py`, `BladeAD/core/acoustics/var_groups.py`,
+`BladeAD/utils/var_groups.py`, `tests/acoustics/test_tonal_api.py`
+
+**What:** added opt-in thickness-to-chord geometry and connected Barry–Magliozzi thickness noise
+to the real BEM tonal API. Loading and thickness component pressure/SPL remain separately exposed;
+the combined output follows the audited HG implementation's energetic per-mode addition.
+
+**Why:** support the validated thickness source without hiding it inside a combined SPL and make
+the current non-phase-coherent combination assumption explicit.
+
+**Verification:** the real BEM end-to-end test now includes thickness, checks separate and combined
+outputs, confirms combined mean-square pressure exceeds loading alone, and verifies observer-position
+derivatives through the full combined chain.
+
 ## 2026-08-18 — Add differentiable Barry–Magliozzi thickness noise
 
 **Files:** `BladeAD/core/acoustics/tonal/thickness.py`,

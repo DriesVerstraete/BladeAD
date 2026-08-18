@@ -18,13 +18,21 @@ def test_real_bem_to_lowson_tonal_api_and_observer_derivative():
     recorder = csdl.Recorder(inline=True)
     recorder.start()
     num_radial = 15
+    root_chord = csdl.Variable(name="root_chord", value=np.array([0.22]))
+    tip_chord = csdl.Variable(name="tip_chord", value=np.array([0.06]))
+    root_twist = csdl.Variable(name="root_twist", value=np.array([np.deg2rad(45.0)]))
+    tip_twist = csdl.Variable(name="tip_twist", value=np.array([np.deg2rad(18.0)]))
+    chord_profile = csdl.linear_combination(root_chord, tip_chord, num_radial).flatten()
+    twist_profile = csdl.linear_combination(root_twist, tip_twist, num_radial).flatten()
+    rpm = csdl.Variable(name="rpm", value=np.array([1800.0]))
+    collective_pitch = csdl.Variable(
+        name="collective_pitch", value=np.array([np.deg2rad(2.0)])
+    )
     mesh = RotorMeshParameters(
         thrust_vector=csdl.Variable(value=np.array([1.0, 0.0, 0.0])),
         thrust_origin=csdl.Variable(value=np.zeros(3)),
-        chord_profile=csdl.Variable(value=np.linspace(0.22, 0.06, num_radial)),
-        twist_profile=csdl.Variable(
-            value=np.linspace(np.deg2rad(45.0), np.deg2rad(18.0), num_radial)
-        ),
+        chord_profile=chord_profile,
+        twist_profile=twist_profile,
         radius=csdl.Variable(value=1.0),
         num_radial=num_radial,
         num_azimuthal=8,
@@ -33,9 +41,10 @@ def test_real_bem_to_lowson_tonal_api_and_observer_derivative():
         thickness_to_chord=csdl.Variable(value=np.full(num_radial, 0.12)),
     )
     inputs = RotorAnalysisInputs(
-        rpm=csdl.Variable(value=np.array([1800.0])),
+        rpm=rpm,
         mesh_velocity=csdl.Variable(value=np.array([[15.0, 0.0, 0.0]])),
         mesh_parameters=mesh,
+        theta_0=collective_pitch,
     )
     polar = ZeroDAirfoilPolarParameters(
         alpha_stall_minus=-10.0,
@@ -91,12 +100,31 @@ def test_real_bem_to_lowson_tonal_api_and_observer_derivative():
         acoustic_outputs.tonal_mode_spl.value
         > acoustic_outputs.loading_mode_spl.value
     )
-    errors = csdl.derivative_utils.verify_derivatives(
+    observer_errors = csdl.derivative_utils.verify_derivatives(
         [acoustic_outputs.tonal_spl],
         [observer_position],
         1e-5,
         print_results=False,
         raise_on_error=True,
     )
-    assert errors is not None
+    assert observer_errors is not None
+    design_variables = [
+        rpm,
+        root_chord,
+        tip_chord,
+        root_twist,
+        tip_twist,
+        collective_pitch,
+    ]
+    design_errors = csdl.derivative_utils.verify_derivatives(
+        [acoustic_outputs.tonal_spl],
+        design_variables,
+        1.0e-5,
+        print_results=False,
+        raise_on_error=False,
+    )
+    for variable in design_variables:
+        result = design_errors[(acoustic_outputs.tonal_spl, variable)]
+        assert np.linalg.norm(result["value"]) > 1.0e-8
+        assert result["rel_error"] < 5.0e-4
     recorder.stop()

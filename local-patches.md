@@ -6,6 +6,21 @@ branch). This file logs every local modification, matching the pattern used for 
 (`999-software/rcaide/local-patches.md`) — check here before diffing against upstream or
 investigating "unexpected" BladeAD behavior.
 
+## 2026-08-18 — Restore BEM pitch and lag input forwarding
+
+**Files:** `BladeAD/core/BEM/bem_model.py`, `tests/acoustics/test_tonal_api.py`
+
+**What:** forwarded the declared collective/cyclic pitch and lag variables from
+`RotorAnalysisInputs` into BEM preprocessing. Added a complete BEM-to-tonal-SPL derivative gate
+for RPM, root/tip chord and twist controls, and collective pitch.
+
+**Why:** BEM accepted these public inputs but omitted them at the preprocessing call, making pitch
+and lag ineffective and their aerodynamic/acoustic sensitivities identically zero.
+
+**Verification:** all six design sensitivities are nonzero and agree with finite differences to
+less than `5e-4` relative error; detailed results are preserved in
+`validation/acoustics/reports/tonal_derivative_verification.md`.
+
 ## 2026-08-18 — Expose Sears loading through the tonal API
 
 **Files:** `BladeAD/core/acoustics/api.py`, `BladeAD/core/acoustics/var_groups.py`,

@@ -13,7 +13,8 @@ Each case directory contains:
 - externally generated predictions in source-labelled NPZ or CSV files.
 
 The initial tonal case is the Hartzell F8475 D-4, retained under RCAIDE's legacy `f8745_d4`
-directory spelling for compatibility, and APC 11x4 is the broadband case.
+directory spelling for compatibility. DJI 9443 is the second tonal geometry, Hartzell F-9684-14
+is the third tonal geometry, and APC 11x4 is the broadband case.
 `lowson_hg_matlab/` preserves a pinned combined Sears-loading plus Barry–Magliozzi thickness
 comparison and its separately labelled experimental points; its README records why the combined
 curve is not yet a loading-only acceptance target.

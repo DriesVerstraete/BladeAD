@@ -214,6 +214,62 @@ def test_dji_9443_generated_model_comparison_is_complete():
     )
 
 
+def test_hartzell_f9684_fixture_and_generated_comparison_are_complete():
+    geometry = read_csv("hartzell_f9684", "geometry.csv")
+    conditions = read_csv("hartzell_f9684", "operating_conditions.csv")
+    observers = read_csv("hartzell_f9684", "observers.csv")
+    harmonics = read_csv("hartzell_f9684", "experimental_harmonics.csv")
+
+    assert len(geometry) == 7
+    assert [row["case"] for row in conditions] == ["BC-4", "AC-2"]
+    assert observers == [
+        {
+            "observer": "reference",
+            "distance_m": "4.0",
+            "angle_from_propeller_axis_deg": "90.0",
+        }
+    ]
+    assert len(harmonics) == 12
+    assert {int(row["bpf_harmonic"]) for row in harmonics} == set(range(1, 7))
+    np.testing.assert_allclose(
+        [float(row["tip_mach"]) for row in conditions], [0.661, 0.751]
+    )
+    np.testing.assert_allclose(
+        [float(row["thrust_coefficient"]) for row in conditions], [0.0627, 0.0640]
+    )
+    np.testing.assert_allclose(
+        [float(row["power_coefficient"]) for row in conditions], [0.0553, 0.0611]
+    )
+    assert harmonics[0]["spl_db"] == "106.8"
+    assert harmonics[-1]["spl_db"] == "99.7"
+
+    with (REPORTS / "bladead_f9684_summary.csv").open(newline="") as stream:
+        summary = list(csv.DictReader(stream))
+    with (REPORTS / "bladead_f9684_detailed.csv").open(newline="") as stream:
+        detail = list(csv.DictReader(stream))
+    with (REPORTS / "bladead_f9684_aerodynamics.csv").open(newline="") as stream:
+        aerodynamics = list(csv.DictReader(stream))
+
+    assert [(row["case"], row["model"]) for row in summary] == [
+        ("BC-4", "lowson"),
+        ("BC-4", "hanson_line"),
+        ("AC-2", "lowson"),
+        ("AC-2", "hanson_line"),
+    ]
+    assert len(detail) == 24
+    assert len(aerodynamics) == 2
+    assert summary[0]["passes_frozen_gate"] == "True"
+    assert all(row["passes_frozen_gate"] == "False" for row in summary[1:])
+    np.testing.assert_allclose(
+        [float(row["harmonic_mae_db"]) for row in summary],
+        [2.410834612941379, 5.425983359828526, 3.120097947755634, 4.995082290552301],
+    )
+    np.testing.assert_allclose(
+        [float(row["target_thrust_n"]) for row in aerodynamics],
+        [1598.9656144667836, 2095.414331685189],
+    )
+
+
 def test_rcaide_baseline_archives_are_complete_and_pinned():
     expected = {
         "f8745_d4/rcaide_line_source_baseline.npz": (3, 19, 29),

@@ -114,3 +114,14 @@ This uses the published rotor geometry, seven FLOWUnsteady section polars, six a
 and digitized Zawodny BPF1/BPF2 directivity at 5400 RPM. Lowson and Hanson receive identical BEM
 loads, radially varying thickness geometry, and observer coordinates. It reports geometry-driven
 and measured-`C_T` load-scaled cases plus separate loading, thickness, and total levels.
+
+Run the Hartzell F-9684-14 third-geometry tonal comparison in the `rotor_design` environment with:
+
+```bash
+python -u run_bladead_f9684_validation.py
+```
+
+This evaluates the BC-4 and AC-2 square-tip cases at the DNW 4 m in-plane reference microphone.
+BladeAD BEM supplies the radial load distribution; sectional thrust and drag are independently
+scaled to the measured `C_T` and `C_P` before identical Lowson and Hanson evaluations. The report
+records the digitized-geometry and digitized-spectrum limitations.

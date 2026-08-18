@@ -28,6 +28,7 @@ class LowsonSteadyLoadingPressure(csdl.VariableGroup):
     cosine_pressure: csdl.Variable
     sine_pressure: csdl.Variable
     bessel_argument: csdl.Variable
+    radiation_distance: csdl.Variable
     acoustic_harmonic_orders: tuple[int, ...]
 
 
@@ -41,14 +42,14 @@ def compute_lowson_steady_loading_pressure(
     speed_of_sound: csdl.Variable,
     num_blades: int,
     modes: Sequence[int],
+    convected_distance: csdl.Variable | None = None,
 ) -> LowsonSteadyLoadingPressure:
     """Evaluate the per-blade Lowson ``lambda=0`` pressure at BPF harmonics.
 
     Parameters use SI units. Shapes are ``(node, harmonic, radial)`` for load coefficients,
     ``(node, radial)`` for dimensional radial stations, ``(node,)`` for angular speed and
-    speed of sound, and ``(node, observer)`` for observer geometry. ``observer_distance`` is
-    the stationary-source radiation distance; a convected distance will replace it in the
-    later moving-source extension.
+    speed of sound, and ``(node, observer)`` for observer geometry. If supplied,
+    ``convected_distance`` is Lowson's retarded-position distance ``S * (1 - M_0r)``.
     """
     coefficient_shape = load_harmonics.thrust_cosine.shape
     if len(coefficient_shape) != 3:
@@ -73,6 +74,8 @@ def compute_lowson_steady_loading_pressure(
         raise ValueError("Observer distances must have shape (node, observer).")
     if observer_axial_distance.shape != observer_shape or observer_in_plane_distance.shape != observer_shape:
         raise ValueError("All observer-geometry arrays must have identical shapes.")
+    if convected_distance is not None and convected_distance.shape != observer_shape:
+        raise ValueError("Convected distance must match the observer-distance shape.")
     if not isinstance(num_blades, int) or num_blades <= 0:
         raise ValueError("Number of blades must be a positive integer.")
     mode_numbers = tuple(int(mode) for mode in modes)
@@ -95,7 +98,8 @@ def compute_lowson_steady_loading_pressure(
     sound_speed = csdl.expand(speed_of_sound, target_shape, "i->iomr")
     axial = csdl.expand(observer_axial_distance, target_shape, "io->iomr")
     in_plane = csdl.expand(observer_in_plane_distance, target_shape, "io->iomr")
-    distance = csdl.expand(observer_distance, target_shape, "io->iomr")
+    radiation_distance = observer_distance if convected_distance is None else convected_distance
+    distance = csdl.expand(radiation_distance, target_shape, "io->iomr")
     thrust = csdl.expand(thrust, target_shape, "ir->iomr")
     drag = csdl.expand(drag, target_shape, "ir->iomr")
 
@@ -149,5 +153,6 @@ def compute_lowson_steady_loading_pressure(
         cosine_pressure=csdl.sum(radial_cosine, axes=(3,)),
         sine_pressure=csdl.sum(radial_sine, axes=(3,)),
         bessel_argument=bessel_argument,
+        radiation_distance=radiation_distance,
         acoustic_harmonic_orders=acoustic_orders,
     )

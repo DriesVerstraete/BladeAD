@@ -6,6 +6,23 @@ branch). This file logs every local modification, matching the pattern used for 
 (`999-software/rcaide/local-patches.md`) — check here before diffing against upstream or
 investigating "unexpected" BladeAD behavior.
 
+## 2026-08-18 — Add Lowson moving-source convection distance
+
+**Files:** `BladeAD/core/acoustics/convection.py`,
+`BladeAD/core/acoustics/tonal/lowson.py`, `tests/acoustics/`
+
+**What:** added the differentiable retarded-position correction
+`S * (1 - source_velocity dot observer_direction / speed_of_sound)` and allowed the Lowson
+steady-loading kernel to use that convected distance consistently in its Bessel and pressure
+terms.
+
+**Why:** represent the forward/aft amplification specified immediately after equation (11) of
+Lowson and Ollerhead (1969), while keeping observer kinematics separate from the pressure kernel.
+
+**Verification:** analytic forward/aft/cross-stream values, CSDL derivative verification with
+respect to all source-velocity components, and an integration test confirming that the supplied
+convected distance replaces the stationary radiation distance in the Lowson kernel.
+
 ## 2026-08-18 — Add Lowson steady-loading pressure kernel
 
 **Files:** `BladeAD/core/acoustics/tonal/lowson.py`,

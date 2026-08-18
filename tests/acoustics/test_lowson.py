@@ -2,6 +2,7 @@ import csdl_alpha as csdl
 import numpy as np
 from scipy.special import jv
 
+from BladeAD.core.acoustics import compute_convected_distance
 from BladeAD.core.acoustics.tonal import (
     LoadHarmonics,
     compute_lowson_steady_loading_pressure,
@@ -117,6 +118,65 @@ def test_lowson_kernel_derivative_wrt_angular_speed():
     errors = csdl.derivative_utils.verify_derivatives(
         [outputs.sine_pressure],
         [angular_speed],
+        1e-6,
+        print_results=False,
+        raise_on_error=True,
+    )
+    assert errors is not None
+    recorder.stop()
+
+
+def test_lowson_kernel_uses_supplied_convected_distance():
+    recorder = csdl.Recorder(inline=True)
+    recorder.start()
+    physical_distance = csdl.Variable(value=np.array([[25.0]]))
+    convected_distance = csdl.Variable(value=np.array([[20.0]]))
+    outputs = compute_lowson_steady_loading_pressure(
+        _load_harmonics(np.array([[[5.0]]]), np.array([[[0.3]]])),
+        csdl.Variable(value=np.array([[0.5]])),
+        csdl.Variable(value=np.array([170.0])),
+        csdl.Variable(value=np.array([[15.0]])),
+        csdl.Variable(value=np.array([[20.0]])),
+        physical_distance,
+        csdl.Variable(value=np.array([340.0])),
+        num_blades=2,
+        modes=(1,),
+        convected_distance=convected_distance,
+    )
+    expected_argument = 2.0 * 170.0 * 0.5 * 20.0 / (340.0 * 20.0)
+    np.testing.assert_allclose(outputs.radiation_distance.value, [[20.0]])
+    np.testing.assert_allclose(outputs.bessel_argument.value, expected_argument)
+    recorder.stop()
+
+
+def test_lowson_pressure_derivative_wrt_source_velocity_through_convection():
+    recorder = csdl.Recorder(inline=True)
+    recorder.start()
+    source_velocity = csdl.Variable(
+        name="source_velocity", value=np.array([[25.0, 0.0, 0.0]])
+    )
+    observer_distance = csdl.Variable(value=np.array([[30.0]]))
+    convected_distance = compute_convected_distance(
+        observer_distance,
+        csdl.Variable(value=np.array([[[0.8, 0.6, 0.0]]])),
+        source_velocity,
+        csdl.Variable(value=np.array([340.0])),
+    )
+    outputs = compute_lowson_steady_loading_pressure(
+        _load_harmonics(np.array([[[6.0, 7.0]]]), np.array([[[0.4, 0.5]]])),
+        csdl.Variable(value=np.array([[0.4, 0.7]])),
+        csdl.Variable(value=np.array([180.0])),
+        csdl.Variable(value=np.array([[18.0]])),
+        csdl.Variable(value=np.array([[24.0]])),
+        observer_distance,
+        csdl.Variable(value=np.array([340.0])),
+        num_blades=2,
+        modes=(1,),
+        convected_distance=convected_distance,
+    )
+    errors = csdl.derivative_utils.verify_derivatives(
+        [outputs.sine_pressure],
+        [source_velocity],
         1e-6,
         print_results=False,
         raise_on_error=True,

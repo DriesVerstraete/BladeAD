@@ -9,6 +9,20 @@ reference predictions, executable validation drivers, and generated reports. Tes
 - `fixtures/` contains tool-independent geometry, operating conditions, and experimental data.
 - `scripts/` contains reproducible validation and reference-generation drivers.
 - `reports/` contains compact committed validation summaries; bulky generated plots stay local.
+- `references/` contains local-only source papers; committed metadata below identifies expected files.
+
+## Local references
+
+`references/Lowson_Ollerhead_1969.pdf` is intentionally excluded from Git. It is:
+
+- M. V. Lowson and J. B. Ollerhead, “A theoretical study of helicopter rotor noise,”
+  *Journal of Sound and Vibration*, 9(2), 197–222, 1969.
+- DOI: `10.1016/0022-460X(69)90028-5`
+- SHA-256: `8b59bb66966d5986e700d81a061ef567f2a461c27b6b7a34a817db2ccad7b3fc`
+
+Equations (9)–(11) define the load Fourier convention, complex pressure harmonics, steady-load
+reduction, and complete-rotor blade-number treatment. The paragraph following equation (11)
+defines the forward-flight substitution `r1 -> r1 * (1 - M_0r)` at the retarded hub position.
 
 ## Data separation
 

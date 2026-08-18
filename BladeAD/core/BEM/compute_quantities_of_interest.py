@@ -20,6 +20,7 @@ def compute_quantities_of_interest(
     Cd: csdl.Variable,
     dr: csdl.Variable,
     radius_vector: csdl.Variable,
+    azimuth_angle: csdl.Variable,
     radius: csdl.Variable,
     num_blades: int,
     integration_scheme: str,
@@ -104,6 +105,11 @@ def compute_quantities_of_interest(
         power_coefficient=C_P
     )
 
+    bem_outputs.radial_stations = radius_vector
+    bem_outputs.radial_element_width = dr
+    bem_outputs.azimuth_angle = azimuth_angle
+    bem_outputs.sectional_loads_include_all_blades = True
+
     bem_outputs.advance_ratio = J
 
     # SPL patch, 2026-08-10: expose the already-in-graph sectional Cl/Cd as
@@ -115,7 +121,6 @@ def compute_quantities_of_interest(
     bem_outputs.sectional_drag_coefficient = Cd
 
     return bem_outputs
-
 
 
 

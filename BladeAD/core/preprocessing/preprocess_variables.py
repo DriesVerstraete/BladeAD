@@ -94,7 +94,7 @@ def preprocess_input_variables(
  
     # compute blade element width
     r_hub = norm_hub_radius * radius
-    dr = (radius - 0.2 * radius) / (num_radial - 1)
+    dr = (radius - r_hub) / (num_radial - 1)
  
     # compute normalized radius ]0, 1[
     # (the values correspond to the center of a blade element)

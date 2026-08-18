@@ -177,6 +177,7 @@ class BEMModel:
             Vt=local_frame_velocities.tangential_velocity,
             rpm=rpm,
             radius_vector=pre_process_outputs.radius_vector_exp,
+            azimuth_angle=pre_process_outputs.azimuth_angle_exp,
             radius=radius,
             sigma=pre_process_outputs.sigma,
             rho=pre_process_outputs.rho_exp,
@@ -300,4 +301,3 @@ class BEMModel:
         bem_outputs.moments = moments
 
         return bem_outputs
-    

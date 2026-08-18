@@ -38,13 +38,12 @@ sectional thrust/torque use the nominally equivalent blade-element expressions `
 Acoustic consistency tests must compare the integrated exposed sectional loads against totals and
 quantify any numerical mismatch rather than assume exact identity.
 
-## Radial-spacing limitation
+## Radial-spacing correction
 
-`preprocess_input_variables` computes hub radius using `norm_hub_radius`, but computes
-`dr = (radius - 0.2 * radius) / (num_radial - 1)`. The `0.2` is hardcoded. Any mesh using a
-non-default hub ratio is internally inconsistent. Acoustic development must not silently inherit
-or conceal this issue; either correct it with aerodynamic regression tests or restrict the first
-validated acoustic interface to `norm_hub_radius == 0.2`.
+The audit found that `preprocess_input_variables` computed hub radius using `norm_hub_radius` but
+computed element width with a hardcoded 0.2 hub ratio. This was corrected to use the declared hub
+radius and regression-tested with `norm_hub_radius=0.3`. The default 0.2 case is numerically
+unchanged.
 
 ## Force directions and frames
 
@@ -54,12 +53,12 @@ to `thrust_vector`; it does not provide a vehicle-frame acoustic convention. Obs
 must therefore use the explicit source origin and thrust axis already established by the acoustic
 observer interface.
 
-## Required interface changes before Lowson coupling
+## Implemented interface requirements
 
-- Expose the in-graph dimensional radius stations, element width, and azimuth angles.
-- Document on `RotorAnalysisOutputs` that sectional forces include all blades.
-- Add a regression test integrating sectional thrust/torque and comparing them with totals.
-- Decide the hardcoded hub-ratio issue before allowing non-default acoustic meshes.
+- In-graph dimensional radius stations, element width, and azimuth angles are exposed.
+- `RotorAnalysisOutputs` documents that sectional forces include all blades.
+- A real BEM regression integrates sectional thrust/torque and compares them with totals.
+- The hardcoded hub-ratio spacing is corrected and tested at a non-default ratio.
 - Use per-blade loads for Lowson by dividing complete-rotor sectional loads by blade count.
 
 These are interface requirements, not permission to change aerodynamic behaviour without separate

@@ -207,6 +207,16 @@ class RotorAnalysisOutputs(csdl.VariableGroup):
     sectional_drag_coefficient : csdl.Variable, optional
         Sectional drag coefficient Cd (if available), by default None. Same
         SPL patch as sectional_lift_coefficient.
+    radial_stations : csdl.Variable, optional
+        Dimensional radial stations (m), with the same node/radial/azimuth
+        shape as sectional loads.
+    radial_element_width : csdl.Variable, optional
+        Dimensional radial integration width (m), with the same shape as
+        sectional loads.
+    azimuth_angle : csdl.Variable, optional
+        Rotor-local azimuth angle (rad), with the same shape as sectional loads.
+    sectional_loads_include_all_blades : bool
+        True when sectional thrust, torque, and drag already include the blade-count factor.
     """
 
     axial_induced_velocity: csdl.Variable
@@ -228,5 +238,8 @@ class RotorAnalysisOutputs(csdl.VariableGroup):
     sectional_inflow_angle = None
     sectional_lift_coefficient: csdl.Variable = None
     sectional_drag_coefficient: csdl.Variable = None
+    radial_stations: csdl.Variable = None
+    radial_element_width: csdl.Variable = None
+    azimuth_angle: csdl.Variable = None
+    sectional_loads_include_all_blades: bool = True
     
-

@@ -6,6 +6,21 @@ branch). This file logs every local modification, matching the pattern used for 
 (`999-software/rcaide/local-patches.md`) — check here before diffing against upstream or
 investigating "unexpected" BladeAD behavior.
 
+## 2026-08-18 — Expose BEM mesh/load conventions for Lowson acoustics
+
+**Files:** `BladeAD/core/BEM/`, `BladeAD/core/preprocessing/preprocess_variables.py`,
+`BladeAD/utils/var_groups.py`, `tests/acoustics/test_bem_acoustic_interface.py`
+
+**What:** exposed dimensional radial stations, radial element width, and azimuth angles on BEM
+outputs; explicitly marked sectional loads as already including all blades; corrected radial
+element width to use the declared normalized hub radius instead of a hardcoded 0.2.
+
+**Why:** Lowson requires per-blade loads at known source locations and phases. These values must
+remain inside the CSDL graph and non-default hub ratios must not silently use inconsistent spacing.
+
+**Verification:** a real BEM solve at `norm_hub_radius=0.3` verifies exposed mesh shapes and values,
+then integrates sectional thrust and torque back to the corresponding totals within 0.5%.
+
 ## 2026-08-18 — Make BladeAD authoritative for acoustic validation assets
 
 **Files:** `validation/acoustics/`

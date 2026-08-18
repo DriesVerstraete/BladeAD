@@ -26,7 +26,9 @@ model.
   three RPM cases and 21 one-third-octave bands.
 - Experimental broadband spectrum: extracted to `experimental_broadband_spectrum.csv`; 42 values
   covering two reported angles and 21 bands at 4200 RPM.
-- Untouched RCAIDE predictions: not generated.
+- RCAIDE prediction: generated for plane-source fidelity, including tonal and broadband outputs,
+  full numeric containers, and a manifest. See `data_dictionary.md` and the baseline-generation
+  report.
 
 The RCAIDE plots label the two experimental broadband spectra as 45 and 22.5 degrees, while the
 simulation observer array uses angles from 45 through 135 degrees and compares these spectra with

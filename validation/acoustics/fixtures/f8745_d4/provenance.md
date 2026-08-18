@@ -23,7 +23,8 @@ Validate harmonic spectra and directivity for the differentiable BladeAD tonal m
 - Observers: extracted to `observers.csv`; 19 positions at 20 m.
 - Experimental harmonic spectra: extracted to `experimental_harmonics.csv`; 108 values covering
   three cases, two reported angles, and 18 harmonics.
-- Untouched RCAIDE predictions: not generated.
+- RCAIDE predictions: generated for line-source and plane-source fidelity, with full numeric
+  containers and manifests. See `data_dictionary.md` and the baseline-generation report.
 
 Extraction is reproducible through `scripts/extract_rcaide_fixtures.py`. Fixture dimensions and
 boundary values are asserted in `tests/acoustics/test_validation_fixtures.py`. No RCAIDE

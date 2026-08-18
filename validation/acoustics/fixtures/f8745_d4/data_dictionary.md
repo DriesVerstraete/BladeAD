@@ -1,0 +1,39 @@
+# F8745-D4 data dictionary
+
+## Coordinate and index conventions
+
+- Geometry uses SI units and follows the RCAIDE rotor's local radial definition.
+- Observer Cartesian coordinates are relative to the rotor origin in the convention constructed
+  by RCAIDE's validation driver; `angle_deg` retains the driver's angle parameter.
+- Case index 1--3 maps in order to 2390, 2710, and 2630 RPM.
+- Baseline acoustic arrays use axes `(case, observer)` or `(case, observer, spectral_bin)`.
+- Baseline disk-load arrays use axes `(case, radial_station, azimuth_station)`.
+
+## CSV files
+
+- `geometry.csv`: station index, dimensional/nondimensional radius, chord, twist, and thickness
+  ratio. `twist_deg` includes the validation driver's shift to 21 degrees at its selected
+  three-quarter-radius station.
+- `operating_conditions.csv`: RPM, axial speed, atmospheric state, angle of attack, twist target,
+  and azimuthal resolution for each case.
+- `observers.csv`: driver angle and Cartesian microphone position in metres.
+- `experimental_harmonics.csv`: measured unweighted SPL in dB by case, reported observer angle,
+  and blade-passing harmonic 1--18.
+
+## RCAIDE baseline files
+
+- `rcaide_line_source_baseline.npz`: untouched RCAIDE line-source prediction.
+- `rcaide_plane_source_baseline.npz`: untouched RCAIDE plane-source prediction.
+- Matching `.manifest.json` files list every stored key, shape, dtype, source commit, driver hash,
+  fidelity, and compatibility intervention.
+
+NPZ keys retain their RCAIDE hierarchy with dots, for example
+`acoustics.converters.F8745_D4_Propeller.SPL_harmonic_bpf_spectrum`. The archive includes all
+serializable numeric/string fields reached from aeroacoustics, aerodynamics, energy, freestream,
+frames, rotor, and settings containers—not only the spectra currently used by tests. Important
+families include total/harmonic/broadband SPL and dBA spectra, frequency bands, sectional and disk
+loads, induced velocities, coefficients, RPM, thrust, torque, geometry, atmosphere, frames,
+observers, propagation settings, and runtime/source metadata.
+
+The 29-bin RCAIDE spectra exceed the 18 experimental harmonics. Comparisons must select bins by
+their meaning/frequency, not truncate solely by array shape without checking the source convention.

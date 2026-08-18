@@ -49,3 +49,25 @@ def test_apc_fixture_dimensions_and_reference_values():
     assert total[-1]["total_spl_db"] == "50.186"
     assert broadband[0]["broadband_spl_db"] == "24.8571428"
     assert broadband[-1]["broadband_spl_db"] == "42.57142"
+
+
+def test_rcaide_baseline_archives_are_complete_and_pinned():
+    expected = {
+        "f8745_d4/rcaide_line_source_baseline.npz": (3, 19, 29),
+        "f8745_d4/rcaide_plane_source_baseline.npz": (3, 19, 29),
+        "apc_11x4/rcaide_plane_source_baseline.npz": (3, 5, 29),
+    }
+    source_commit = "c88217f3fd0ef9740e86cfc4241bb4362bb7a766"
+    for relative_path, spectrum_shape in expected.items():
+        path = FIXTURES / relative_path
+        with np.load(path, allow_pickle=False) as baseline:
+            assert str(baseline["source_commit"]) == source_commit
+            assert bool(baseline["runtime_numpy_trapezoid_compatibility_alias"])
+            spectrum_keys = [
+                key for key in baseline.files if key.endswith("SPL_1_3_spectrum")
+            ]
+            assert len(spectrum_keys) == 1
+            spectrum = baseline[spectrum_keys[0]]
+            assert spectrum.shape == spectrum_shape
+            assert np.isfinite(spectrum).all()
+            assert len(baseline.files) >= 280

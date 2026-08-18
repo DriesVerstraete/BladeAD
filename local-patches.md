@@ -13,7 +13,9 @@ investigating "unexpected" BladeAD behavior.
 **What:** established the version-controlled layout and provenance rules for acoustic fixtures,
 source-tool baselines, validation drivers, and compact reports. Experimental measurements and
 RCAIDE predictions are required to remain separate. Added reproducible extraction and integrity
-tests for F8745-D4 and APC 11x4 geometry, conditions, observers, and experimental spectra.
+tests for F8745-D4 and APC 11x4 geometry, conditions, observers, experimental spectra, and pinned
+RCAIDE source-tool baselines. Baseline archives preserve complete serializable numeric containers,
+manifests, data dictionaries, runtime/source metadata, and the required NumPy compatibility alias.
 
 **Why:** keep the validation evidence beside the reusable acoustic implementation and tests so a
 fresh checkout can locate and reproduce the model's evidence without project-local knowledge.

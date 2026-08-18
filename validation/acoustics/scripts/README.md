@@ -15,3 +15,14 @@ python -u extract_rcaide_fixtures.py --rcaide-root /path/to/RCAIDE_LEADS
 
 Run this command in the `rcaide` environment. Review changes to existing CSV files before
 accepting them; the script is reproducible extraction machinery, not authority to overwrite data.
+
+Generate untouched source-tool predictions separately with:
+
+```bash
+python -u generate_rcaide_baselines.py \
+  --rcaide-root /path/to/RCAIDE_LEADS \
+  --source-commit <full-commit-hash>
+```
+
+This runs RCAIDE's own validation driver without changing its model settings and captures its
+outputs into source-labelled compressed NPZ files. It can take several minutes.

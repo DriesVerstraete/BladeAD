@@ -6,6 +6,21 @@ branch). This file logs every local modification, matching the pattern used for 
 (`999-software/rcaide/local-patches.md`) — check here before diffing against upstream or
 investigating "unexpected" BladeAD behavior.
 
+## 2026-08-18 — Add F8745-D4 experimental tonal validation
+
+**Files:** `validation/acoustics/scripts/run_bladead_f8745_validation.py`,
+`validation/acoustics/reports/`, `tests/acoustics/test_f8745_bladead_report.py`
+
+**What:** added a reproducible BladeAD Lowson plus Barry–Magliozzi comparison against all 108
+F8745-D4 measured harmonics, using frozen RCAIDE disk loads to isolate acoustic-radiation error.
+
+**Why:** apply the pre-frozen experimental gate before allowing the tonal model to influence an
+optimised rotor design, while keeping RCAIDE predictions separate from experimental truth.
+
+**Verification:** every case fails the frozen 3 dB MAE/overall thresholds, with 13.320–22.140 dB
+harmonic MAE and -11.488 to -16.779 dB overall error. The uncalibrated failure is preserved as an
+active regression and the model is not accepted as forward-flight experimental design authority.
+
 ## 2026-08-18 — Restore BEM pitch and lag input forwarding
 
 **Files:** `BladeAD/core/BEM/bem_model.py`, `tests/acoustics/test_tonal_api.py`

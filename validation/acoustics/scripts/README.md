@@ -26,3 +26,14 @@ python -u generate_rcaide_baselines.py \
 
 This runs RCAIDE's own validation driver without changing its model settings and captures its
 outputs into source-labelled compressed NPZ files. It can take several minutes.
+
+Run the BladeAD F8745-D4 acoustic-radiation comparison in the `rotor_design` environment with:
+
+```bash
+python run_bladead_f8745_validation.py
+```
+
+This uses aerodynamic disk loads already frozen in the RCAIDE line-source archive, converts its
+negative propeller-coordinate sectional distributions to BladeAD's positive thrust/drag magnitude
+convention, and evaluates BladeAD Lowson plus Barry–Magliozzi noise. It does not import RCAIDE or
+claim to validate BladeAD BEM aerodynamics.

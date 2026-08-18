@@ -13,6 +13,7 @@ from BladeAD.core.acoustics.tonal import (
     compute_load_harmonics,
     compute_barry_magliozzi_thickness_noise,
     compute_lowson_loading_pressure,
+    compute_sears_load_harmonics,
     synthesize_lowson_rotor_pressure,
 )
 from BladeAD.core.acoustics.weighting import a_weighting_db
@@ -90,7 +91,7 @@ def evaluate_rotor_acoustics(
         raise ValueError("Load harmonics must be non-negative integers.")
     if len(set(load_harmonics)) != len(load_harmonics):
         raise ValueError("Load harmonics must be unique.")
-    if max(load_harmonics) > (num_azimuthal - 1) // 2:
+    if not settings.sears_enabled and max(load_harmonics) > (num_azimuthal - 1) // 2:
         raise ValueError("Azimuth resolution is insufficient for requested load harmonics.")
 
     num_nodes = rpm.shape[0]
@@ -120,13 +121,52 @@ def evaluate_rotor_acoustics(
     convected_distance = compute_convected_distance(
         distance, direction, source_velocity, sound_speed
     )
-    coefficients = compute_load_harmonics(
-        rotor_outputs.sectional_thrust * rotor_outputs.radial_integration_weights,
-        rotor_outputs.sectional_drag * rotor_outputs.radial_integration_weights,
-        rotor_outputs.azimuth_angle,
-        mesh.num_blades,
-        load_harmonics,
-    )
+    def node_radial(value, name):
+        variable = value if isinstance(value, csdl.Variable) else csdl.Variable(value=np.asarray(value))
+        if variable.shape == (mesh.num_radial,):
+            return csdl.expand(variable, (num_nodes, mesh.num_radial), "r->ir")
+        if variable.shape != (num_nodes, mesh.num_radial):
+            raise ValueError(f"{name} must have shape (radial,) or (node, radial).")
+        return variable
+
+    def node_scalar(value, name):
+        variable = value if isinstance(value, csdl.Variable) else csdl.Variable(
+            value=np.asarray(value, dtype=float).reshape(-1)
+        )
+        if variable.shape == (1,) and num_nodes > 1:
+            variable = csdl.expand(variable, (num_nodes,))
+        if variable.shape != (num_nodes,):
+            raise ValueError(f"{name} must be scalar or have shape (node,).")
+        return variable
+
+    density = node_scalar(rotor_inputs.atmos_states.density, "Density")
+    if settings.sears_enabled:
+        if getattr(rotor_outputs, "sectional_inflow_angle", None) is None:
+            raise ValueError("Sears loading requires sectional inflow angle.")
+        coefficients = compute_sears_load_harmonics(
+            rotor_outputs.sectional_thrust[:, :, 0]
+            * rotor_outputs.radial_integration_weights[:, :, 0],
+            rotor_outputs.sectional_drag[:, :, 0]
+            * rotor_outputs.radial_integration_weights[:, :, 0],
+            rotor_outputs.radial_stations[:, :, 0],
+            rotor_outputs.radial_element_width[:, :, 0],
+            rotor_outputs.radial_integration_weights[:, :, 0],
+            node_radial(mesh.chord_profile, "Chord profile"),
+            rotor_outputs.sectional_inflow_angle[:, :, 0],
+            rpm * 2.0 * np.pi / 60.0,
+            density,
+            mesh.num_blades,
+            load_harmonics,
+            settings.sears_gust_amplification,
+        )
+    else:
+        coefficients = compute_load_harmonics(
+            rotor_outputs.sectional_thrust * rotor_outputs.radial_integration_weights,
+            rotor_outputs.sectional_drag * rotor_outputs.radial_integration_weights,
+            rotor_outputs.azimuth_angle,
+            mesh.num_blades,
+            load_harmonics,
+        )
     loading_pressure = compute_lowson_loading_pressure(
         coefficients,
         rotor_outputs.radial_stations[:, :, 0],
@@ -152,21 +192,6 @@ def evaluate_rotor_acoustics(
         if mesh.thickness_to_chord is None:
             raise ValueError("Thickness noise requires mesh thickness_to_chord data.")
 
-        def node_radial(value, name):
-            variable = value if isinstance(value, csdl.Variable) else csdl.Variable(value=np.asarray(value))
-            if variable.shape == (mesh.num_radial,):
-                return csdl.expand(variable, (num_nodes, mesh.num_radial), "r->ir")
-            if variable.shape != (num_nodes, mesh.num_radial):
-                raise ValueError(f"{name} must have shape (radial,) or (node, radial).")
-            return variable
-
-        density = rotor_inputs.atmos_states.density
-        if not isinstance(density, csdl.Variable):
-            density = csdl.Variable(value=np.asarray(density, dtype=float).reshape(-1))
-        if density.shape == (1,) and num_nodes > 1:
-            density = csdl.expand(density, (num_nodes,))
-        if density.shape != (num_nodes,):
-            raise ValueError("Density must be scalar or have shape (node,).")
         velocity_squared = csdl.sum(source_velocity**2, axes=(1,))
         mach_number = csdl.sqrt(velocity_squared + 1.0e-24) / sound_speed
         thickness = compute_barry_magliozzi_thickness_noise(

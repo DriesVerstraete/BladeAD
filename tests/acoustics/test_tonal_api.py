@@ -62,9 +62,12 @@ def test_real_bem_to_lowson_tonal_api_and_observer_derivative():
         AcousticObserverData(positions=observer_position),
         RotorAcousticSettings(
             modes=(1, 2),
-            load_harmonics=(0, 1, 2, 3),
+            # Sears harmonics are analytic and are not Nyquist-limited by the
+            # BEM azimuth grid (eight samples in this regression).
+            load_harmonics=tuple(range(11)),
             tonal_enabled=True,
             thickness_enabled=True,
+            sears_enabled=True,
             broadband_enabled=False,
         ),
     )

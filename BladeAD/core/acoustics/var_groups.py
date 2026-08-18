@@ -24,6 +24,8 @@ class RotorAcousticSettings(csdl.VariableGroup):
     load_harmonics: Sequence[int] = tuple(range(11))
     tonal_enabled: bool = False
     thickness_enabled: bool = False
+    sears_enabled: bool = False
+    sears_gust_amplification: float = 0.06
     broadband_enabled: bool = False
     a_weighting_enabled: bool = True
     reference_pressure: float = 20.0e-6

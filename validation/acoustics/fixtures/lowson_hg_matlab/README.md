@@ -11,6 +11,12 @@ source test sets `toggle_thickness_noise=True`, combines its hover Sears loading
 Barry–Magliozzi thickness model, and labels the plot “Lowson + thickness noise”. It therefore
 must not be used as an acceptance gate for BladeAD's current loading-only implementation.
 
+`radial_inputs.csv` preserves every radial input array present in the pinned test: nondimensional
+radius, adjusted chord, thrust and drag coefficient distributions, inflow ratio, and lift
+coefficient. The pinned acoustic call derives its supplied steady thrust and drag distributions
+from chord, lift coefficient, and inflow angle; `dCT_dr` and `dCD_dr` are retained as independent
+aerodynamic provenance even though that call does not consume them.
+
 The source case uses three blades, 1500 rpm, radius 0.3556 m, density 1.225 kg/m3, speed of sound
 340.3 m/s, observer radius 1.5 m, 40 radial stations from `r/R=0.21` to `0.99`, and the first
 blade-passing mode. The source maps its observer and plotted angle arrays inconsistently; that
@@ -34,6 +40,9 @@ applied.
 ## Acceptance status
 
 - Loading-only equation (10): independently verified in `tests/acoustics/test_loading.py`.
-- HG combined curve: fixture frozen, **not yet an active acceptance test**.
-- Required before activation: Barry–Magliozzi thickness pressure, Sears hover-loading convention,
-  exact observer-angle mapping, and separate component output comparisons.
+- HG combined curve: active uncalibrated characterisation test in
+  `tests/acoustics/test_hg_combined.py`. With harmonics 0–10, the BladeAD result has a -0.384 dB
+  mean offset, 2.059 dB maximum absolute error, and 1.675 dB maximum residual after removing the
+  common offset relative to the frozen HG-MATLAB curve.
+- The source observer order is retained and compared with the reversed HG array, exactly as in the
+  pinned source test. Separate loading and thickness outputs remain available for diagnosis.

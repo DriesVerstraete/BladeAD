@@ -6,6 +6,20 @@ branch). This file logs every local modification, matching the pattern used for 
 (`999-software/rcaide/local-patches.md`) — check here before diffing against upstream or
 investigating "unexpected" BladeAD behavior.
 
+## 2026-08-18 — Expose Sears loading through the tonal API
+
+**Files:** `BladeAD/core/acoustics/api.py`, `BladeAD/core/acoustics/var_groups.py`,
+`tests/acoustics/test_tonal_api.py`
+
+**What:** added opt-in Sears load harmonics and configurable gust amplification to the real BEM
+tonal chain, using BEM inflow angle and the same radial quadrature convention as steady loads.
+
+**Why:** allow the HG hover-loading branch to be selected without replacing the default direct
+Fourier projection used for azimuthally resolved BEM loads.
+
+**Verification:** the real BEM end-to-end test now exercises Sears loading, thickness noise,
+combined SPL, A-weighting, and observer-position derivatives through the complete graph.
+
 ## 2026-08-18 — Add differentiable Sears hover-loading harmonics
 
 **Files:** `BladeAD/core/acoustics/tonal/sears.py`, `tests/acoustics/test_sears.py`,

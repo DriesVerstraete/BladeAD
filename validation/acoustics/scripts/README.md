@@ -7,6 +7,15 @@ processes because the project uses separate `rcaide` and `rotor_design` environm
 Validation scripts report signed error, mean absolute error, maximum absolute error, and overall
 SPL error as applicable. Plotting is supplementary and never replaces numerical assertions.
 
+Audit the APC 11×4 observer mapping in the `rotor_design` environment with:
+
+```bash
+python -u audit_apc_observer_mapping.py
+```
+
+This derives the experimental downstream angle from the frozen Cartesian coordinates and verifies
+the `112.5° → 22.5°` and `135° → 45°` driver-to-rotor-plane mapping.
+
 Generate the initial tool-independent fixtures from the pinned RCAIDE checkout with:
 
 ```bash
@@ -126,3 +135,24 @@ BladeAD BEM supplies the radial load distribution; sectional thrust and drag are
 scaled to the measured `C_T` and `C_P` before identical Lowson and Hanson evaluations. The frozen
 gate covers BPF1--6, while the higher-harmonic diagnostic extends through BPF13 for BC-4 and BPF24
 for AC-2. The report records the digitized-geometry and digitized-spectrum limitations.
+
+Verify the complete optimisation-facing tonal graph in the `rotor_design` environment with:
+
+```bash
+python -u run_production_graph_verification.py
+```
+
+This compares `CSDLAlphaProblem` primal values and gradients with direct CSDL values and explicit
+central differences for forward-flight and hover-like coupled cases. These are numerical
+production-graph checks, not new experimental validation datasets.
+
+Run the APC 11x4 Gill--Lee broadband comparison in the `rotor_design` environment with:
+
+```bash
+python -u run_bladead_apc_gill_lee_validation.py
+```
+
+This compares the differentiable BladeAD implementation with the measured 100--10,000 Hz
+one-third-octave spectra at the two resolved observers. It reports both geometry-driven BladeAD
+BEM loading and a frozen RCAIDE integrated-load sensitivity case. The comparison is coupled
+because the experiment does not report measured aerodynamic loads.

@@ -30,6 +30,6 @@ physical validation metrics. BladeAD validation will instead compute signed dB e
 maximum absolute error, and overall SPL error directly against the experimental fixtures.
 
 The APC driver completed with maximum relative-to-dB-array differences of 0.9228 and 0.5624 for
-its two selected broadband comparisons. These large values and the unresolved observer-angle
-mapping require explicit investigation; the baseline is evidence of current RCAIDE behaviour,
-not evidence that the model is experimentally accurate.
+its two selected broadband comparisons. The observer mapping was subsequently resolved from the
+Cartesian geometry, but these large spectral differences still require explicit investigation;
+the baseline is evidence of current RCAIDE behaviour, not experimental accuracy.

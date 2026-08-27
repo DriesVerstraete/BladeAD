@@ -21,9 +21,12 @@
 - `experimental_broadband_spectrum.csv`: measured broadband unweighted SPL at 4200 RPM by reported
   observer angle and one-third-octave centre frequency.
 
-The reported experimental broadband angles (45 and 22.5 degrees) do not directly match the
-driver's five simulated angle parameters (45 through 135 degrees). RCAIDE compares them with
-observer indices 4 and 3. This unresolved mapping is intentionally not encoded as equivalence.
+The experimental broadband angles are measured from the rotor plane on the downstream side.
+RCAIDE's semicircle driver parameter is measured from the upstream rotor axis. Consequently,
+observer index 3 (`112.5°`) is `22.5°` downstream from the rotor plane and observer index 4
+(`135°`) is `45°` downstream from the rotor plane. The Cartesian coordinates independently give
+the same angles through `atan2(x, |y|)`. The source's `60deg`/`90deg` verification-variable names
+are stale and contradict its plotted `22.5°`/`45°` labels and coordinates.
 
 ## RCAIDE baseline files
 

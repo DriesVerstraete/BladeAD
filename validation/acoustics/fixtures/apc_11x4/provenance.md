@@ -30,10 +30,10 @@ model.
   full numeric containers, and a manifest. See `data_dictionary.md` and the baseline-generation
   report.
 
-The RCAIDE plots label the two experimental broadband spectra as 45 and 22.5 degrees, while the
-simulation observer array uses angles from 45 through 135 degrees and compares these spectra with
-indices 4 and 3. The relationship between reported experimental angles and simulated coordinates
-is unresolved; both are retained without reinterpretation.
+The RCAIDE plots label the two experimental broadband spectra as 45 and 22.5 degrees from the
+rotor plane. The corresponding downstream Cartesian observers are indices 4 and 3: their driver
+parameters are 135 and 112.5 degrees, respectively. The geometry independently resolves the
+experimental angles through `atan2(x, |y|)`; see `reports/apc_observer_mapping_audit.md`.
 
 Extraction is reproducible through `scripts/extract_rcaide_fixtures.py`. Fixture dimensions and
 boundary values are asserted in `tests/acoustics/test_validation_fixtures.py`. No RCAIDE

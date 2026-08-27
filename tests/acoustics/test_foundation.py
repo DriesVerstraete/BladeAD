@@ -10,6 +10,7 @@ from BladeAD.core.acoustics import (
     evaluate_observer_geometry,
     evaluate_rotor_acoustics,
     pressure_squared_to_spl,
+    smooth_maximum_spl,
 )
 from BladeAD.utils.var_groups import RotorAnalysisInputs, RotorMeshParameters
 
@@ -109,3 +110,27 @@ def test_observer_distance_derivative(recorder):
         raise_on_error=True,
     )
     assert errors is not None
+
+
+def test_smooth_maximum_spl_value_bias_and_derivatives(recorder):
+    levels = csdl.Variable(
+        name="observer_levels", value=np.array([[54.0, 56.0, 55.0, 51.0]])
+    )
+    aggregate = smooth_maximum_spl(levels, maximum_bias_db=0.5)
+    rho = np.log(4.0) / 0.5
+    expected = 100.0 + np.log(
+        np.sum(np.exp(rho * (levels.value - 100.0)), axis=1)
+    ) / rho
+    np.testing.assert_allclose(aggregate.value, expected, rtol=1.0e-13)
+    assert aggregate.value[0] >= np.max(levels.value)
+    assert aggregate.value[0] - np.max(levels.value) <= 0.5
+    relative_errors = []
+    for step in (1.0e-4, 1.0e-5, 1.0e-6):
+        errors = csdl.derivative_utils.verify_derivatives(
+            [aggregate], [levels], step, print_results=False, raise_on_error=False
+        )
+        result = errors[(aggregate, levels)]
+        np.testing.assert_allclose(np.sum(result["value"]), 1.0, rtol=1.0e-12)
+        relative_errors.append(result["rel_error"])
+    assert relative_errors[1] < 1.0e-5
+    assert relative_errors[1] < relative_errors[0]

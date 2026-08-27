@@ -35,19 +35,18 @@ to these fixtures.
 | APC-11x4-3600-RPM | rcaide_plane_source | total_one_third_octave | 45.0 | 21 | 7.150 | 14.958 | -2.418 |
 | APC-11x4-4200-RPM | rcaide_plane_source | total_one_third_octave | 45.0 | 21 | 6.674 | 17.919 | -2.278 |
 | APC-11x4-4800-RPM | rcaide_plane_source | total_one_third_octave | 45.0 | 21 | 6.800 | 13.213 | -2.898 |
-| APC-11x4-4200-RPM | rcaide_plane_source_source_driver_angle_mapping | broadband_one_third_octave | 22.5 | 21 | 9.453 | 22.765 | -3.654 |
-| APC-11x4-4200-RPM | rcaide_plane_source_source_driver_angle_mapping | broadband_one_third_octave | 45.0 | 21 | 5.296 | 16.370 | 1.262 |
+| APC-11x4-4200-RPM | rcaide_plane_source_resolved_geometry_mapping | broadband_one_third_octave | 22.5 | 21 | 9.453 | 22.765 | -3.654 |
+| APC-11x4-4200-RPM | rcaide_plane_source_resolved_geometry_mapping | broadband_one_third_octave | 45.0 | 21 | 5.296 | 16.370 | 1.262 |
 
 Detailed signed errors are in `rcaide_vs_experiment_detailed.csv`; unrounded summary
 metrics are in `rcaide_vs_experiment_summary.csv`.
 
-## Known mapping limitation
+## Resolved observer mapping
 
-For APC broadband data, RCAIDE labels experimental curves as 45 and 22.5 degrees but
-compares them to simulated observer indices 4 and 3, whose driver angle parameters are
-135 and 112.5 degrees. The rows labelled
-`rcaide_plane_source_source_driver_angle_mapping` reproduce that source behaviour and
-must not be interpreted as a resolved physical-angle equivalence.
+The experimental labels are downstream angles from the rotor plane. RCAIDE observer
+indices 4 and 3 have driver parameters 135 and 112.5 degrees, but their Cartesian
+positions resolve to 45 and 22.5 degrees from the rotor plane. The rows labelled
+`rcaide_plane_source_resolved_geometry_mapping` use that physical equivalence.
 
 ## Physical-validation readiness
 
@@ -56,7 +55,11 @@ must not be interpreted as a resolved physical-angle equivalence.
 | F8475 D-4 (`F8745-D4` legacy ID) | Table 4 measured thrust and shaft power; prediction matched power coefficient by adjusting blade angle; RCAIDE-generated sectional loads; measurement uncertainty and measured sectional loading not reported | 18 harmonics at 60° and 90° for three cases | Coupled code/experiment diagnostic; legacy RCAIDE conditions differ from Table 4 and must be corrected before physical validation |
 | DJI 9443, 5400 RPM hover | Measured `C_T=0.072`; open chord/twist geometry, seven section polars, and six contours; BladeAD gives `C_T=0.07533` | Digitized BPF1/BPF2 and OASPL directivity plus Figure 14 computational components on the corrected 1.905 m observer plane | Coupled tonal validation; BPF2 discrepancy reproduced as a published deterministic-model limitation |
 | Hartzell F-9684-14 BC-4/AC-2 | Published `C_T`, `C_P`, atmosphere, and digitized square-tip geometry; BEM radial loads scaled independently to measured integrated thrust and power | BPF1--13/24 at the unambiguous 4 m in-plane DNW reference microphone | Third-geometry tonal validation; Lowson passes both frozen BPF1--6 gates and the same numerical criteria over all available harmonics |
-| APC 11x4 | RCAIDE-generated source state | Total and broadband one-third-octave spectra | Broadband fixture; physical angle mapping remains unresolved |
+| APC 11x4 | BladeAD BEM geometry-driven load plus frozen RCAIDE integrated-load sensitivity; measured thrust/torque unavailable | Broadband one-third-octave spectra at resolved 22.5°/45° observers | Gill--Lee passes the frozen overall and band-MAE gate in all four source-load/observer cases; coupled validation only |
+
+Gill--Lee uses the official upstream implementation's fixed `0.2R` planform-integration inner
+radius rather than the APC BEM mesh's `0.15R` hub start. This is a source-model convention, not a
+validation fit. Detailed results are in `bladead_apc_gill_lee_validation.md`.
 
 The F8745 load-sensitivity report shows that ±10% common thrust/torque scaling changes overall
 error by at most 0.85 dB, while the tested fixed-integral radial redistributions change it by at

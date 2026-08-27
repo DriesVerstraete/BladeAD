@@ -4,6 +4,7 @@ import csdl_alpha as csdl
 import numpy as np
 
 from BladeAD.core.acoustics.aggregation import pressure_squared_to_spl
+from BladeAD.core.acoustics.broadband import compute_gill_lee_broadband
 from BladeAD.core.acoustics.convection import compute_convected_distance
 from BladeAD.core.acoustics.observers import (
     evaluate_observer_geometry,
@@ -41,10 +42,8 @@ def evaluate_rotor_acoustics(
         raise ValueError("Thickness noise requires tonal acoustics to be enabled.")
     if settings.tonal_model == "hanson_line" and settings.sears_enabled:
         raise ValueError("Sears loading is available only with the Lowson model.")
-    if settings.broadband_enabled:
-        raise NotImplementedError(
-            "Broadband models are not available in the acoustic foundation."
-        )
+    if settings.broadband_model != "gill_lee":
+        raise ValueError("Broadband model must be 'gill_lee'.")
     if not settings.modes or any(int(mode) != mode or mode <= 0 for mode in settings.modes):
         raise ValueError("Acoustic modes must be positive integers.")
 
@@ -65,17 +64,110 @@ def evaluate_rotor_acoustics(
     modes_expanded = csdl.expand(modes, fundamental_expanded.shape, "j->ij")
     blade_passing_frequencies = fundamental_expanded * modes_expanded
 
+    broadband = None
+    broadband_weighted_total = None
+    if settings.broadband_enabled:
+        if rotor_outputs is None or rotor_outputs.thrust_coefficient is None:
+            raise ValueError("Gill-Lee broadband noise requires rotor thrust coefficient.")
+        num_nodes = rpm.shape[0]
+
+        def broadband_node_vectors(value):
+            variable = value if isinstance(value, csdl.Variable) else csdl.Variable(
+                value=np.asarray(value)
+            )
+            if variable.shape == (3,):
+                return csdl.expand(variable, (num_nodes, 3), "j->ij")
+            if variable.shape != (num_nodes, 3):
+                raise ValueError(
+                    "Rotor origin and thrust axis must have shape (3,) or (node, 3)."
+                )
+            return variable
+
+        broadband_origins = broadband_node_vectors(mesh.thrust_origin)
+        broadband_axes = broadband_node_vectors(mesh.thrust_vector)
+        (
+            broadband_distance,
+            _,
+            broadband_axial_distance,
+            _,
+        ) = evaluate_observer_geometry_nodes(
+            observers, broadband_origins, broadband_axes
+        )
+        broadband_sound_speed = rotor_inputs.atmos_states.speed_of_sound
+        if not isinstance(broadband_sound_speed, csdl.Variable):
+            broadband_sound_speed = csdl.Variable(
+                value=np.asarray(broadband_sound_speed, dtype=float).reshape(-1)
+            )
+        if broadband_sound_speed.shape == (1,) and num_nodes > 1:
+            broadband_sound_speed = csdl.expand(
+                broadband_sound_speed, (num_nodes,)
+            )
+        broadband = compute_gill_lee_broadband(
+            rotor_outputs.thrust_coefficient,
+            mesh.chord_profile,
+            mesh.radius,
+            rpm,
+            rotor_inputs.mesh_velocity,
+            broadband_sound_speed,
+            broadband_distance,
+            csdl.arcsin(broadband_axial_distance / broadband_distance),
+            mesh.num_blades,
+            settings.gill_lee_norm_hub_radius,
+            settings.broadband_center_frequencies,
+            settings.reference_pressure,
+        )
+        if settings.a_weighting_enabled:
+            broadband_weighting = a_weighting_db(broadband.frequencies)
+            broadband_weighting = csdl.expand(
+                broadband_weighting,
+                broadband.one_third_octave_pressure_squared.shape,
+                "f->iof",
+            )
+            broadband_weighted_total = csdl.reshape(
+                csdl.sum(
+                    broadband.one_third_octave_pressure_squared
+                    * csdl.exp(np.log(10.0) / 10.0 * broadband_weighting),
+                    axes=(2,),
+                ),
+                broadband_distance.shape,
+            )
+
     if not settings.tonal_enabled:
         distance, direction, axis_cosine = evaluate_observer_geometry(
             observers=observers,
             source_origin=mesh.thrust_origin,
             thrust_axis=mesh.thrust_vector,
         )
+        total_spl_a_weighted = None
+        if broadband_weighted_total is not None:
+            total_spl_a_weighted = pressure_squared_to_spl(
+                broadband_weighted_total,
+                settings.reference_pressure,
+                settings.pressure_squared_floor,
+            )
         return RotorAcousticOutputs(
             observer_distance=distance,
             observer_direction=direction,
             observer_axis_cosine=axis_cosine,
             blade_passing_frequencies=blade_passing_frequencies,
+            broadband_pressure_squared=(
+                None if broadband is None else broadband.total_pressure_squared
+            ),
+            broadband_spl=None if broadband is None else broadband.total_spl,
+            broadband_frequencies=None if broadband is None else broadband.frequencies,
+            broadband_one_third_octave_spl=(
+                None if broadband is None else broadband.one_third_octave_spl
+            ),
+            broadband_one_third_octave_pressure_squared=(
+                None
+                if broadband is None
+                else broadband.one_third_octave_pressure_squared
+            ),
+            total_pressure_squared=(
+                None if broadband is None else broadband.total_pressure_squared
+            ),
+            total_spl=None if broadband is None else broadband.total_spl,
+            total_spl_a_weighted=total_spl_a_weighted,
         )
 
     if rotor_outputs is None:
@@ -317,7 +409,7 @@ def evaluate_rotor_acoustics(
             )
             combined_mode_squared = tonal.mode_pressure_squared + thickness.mode_pressure_squared
 
-    combined_total_squared = csdl.reshape(
+    tonal_total_squared = csdl.reshape(
         csdl.sum(combined_mode_squared, axes=(2,)), distance.shape
     )
     combined_mode_spl = pressure_squared_to_spl(
@@ -327,7 +419,18 @@ def evaluate_rotor_acoustics(
     )
     combined_total_spl = csdl.reshape(
         pressure_squared_to_spl(
-            combined_total_squared,
+            tonal_total_squared,
+            settings.reference_pressure,
+            settings.pressure_squared_floor,
+        ),
+        distance.shape,
+    )
+    total_squared = tonal_total_squared
+    if broadband is not None:
+        total_squared = total_squared + broadband.total_pressure_squared
+    total_spl = csdl.reshape(
+        pressure_squared_to_spl(
+            total_squared,
             settings.reference_pressure,
             settings.pressure_squared_floor,
         ),
@@ -347,6 +450,8 @@ def evaluate_rotor_acoustics(
         weighted_total = csdl.reshape(
             csdl.sum(weighted_mode_squared, axes=(2,)), distance.shape
         )
+        if broadband_weighted_total is not None:
+            weighted_total = weighted_total + broadband_weighted_total
         total_spl_a_weighted = csdl.reshape(
             pressure_squared_to_spl(
                 weighted_total, settings.reference_pressure, settings.pressure_squared_floor
@@ -359,8 +464,11 @@ def evaluate_rotor_acoustics(
         observer_direction=direction,
         observer_axis_cosine=csdl.reshape(axial_distance / distance, distance.shape),
         blade_passing_frequencies=blade_passing_frequencies,
-        tonal_pressure_squared=combined_total_squared,
-        total_pressure_squared=combined_total_squared,
+        tonal_pressure_squared=tonal_total_squared,
+        broadband_pressure_squared=(
+            None if broadband is None else broadband.total_pressure_squared
+        ),
+        total_pressure_squared=total_squared,
         tonal_spl=combined_total_spl,
         loading_pressure_squared=tonal.total_pressure_squared,
         loading_spl=tonal.total_spl,
@@ -383,6 +491,14 @@ def evaluate_rotor_acoustics(
         tonal_mode_spl=combined_mode_spl,
         tonal_cosine_pressure=combined_cosine_pressure,
         tonal_sine_pressure=combined_sine_pressure,
-        total_spl=combined_total_spl,
+        broadband_spl=None if broadband is None else broadband.total_spl,
+        broadband_frequencies=None if broadband is None else broadband.frequencies,
+        broadband_one_third_octave_spl=(
+            None if broadband is None else broadband.one_third_octave_spl
+        ),
+        broadband_one_third_octave_pressure_squared=(
+            None if broadband is None else broadband.one_third_octave_pressure_squared
+        ),
+        total_spl=total_spl,
         total_spl_a_weighted=total_spl_a_weighted,
     )

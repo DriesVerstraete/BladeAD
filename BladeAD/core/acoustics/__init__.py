@@ -1,9 +1,14 @@
 from BladeAD.core.acoustics.aggregation import (
     energetic_sum,
     pressure_squared_to_spl,
+    smooth_maximum_spl,
 )
 from BladeAD.core.acoustics.api import evaluate_rotor_acoustics
 from BladeAD.core.acoustics.convection import compute_convected_distance
+from BladeAD.core.acoustics.broadband import (
+    GillLeeBroadbandOutputs,
+    compute_gill_lee_broadband,
+)
 from BladeAD.core.acoustics.observers import (
     evaluate_observer_geometry,
     evaluate_observer_geometry_nodes,
@@ -29,6 +34,7 @@ from BladeAD.core.acoustics.weighting import a_weighting_db
 __all__ = [
     "AcousticObserverData",
     "BarryMagliozziThicknessOutputs",
+    "GillLeeBroadbandOutputs",
     "LoadHarmonics",
     "LowsonLoadingPressure",
     "LowsonRotorTonalOutputs",
@@ -42,8 +48,10 @@ __all__ = [
     "compute_sears_load_harmonics",
     "synthesize_lowson_rotor_pressure",
     "compute_convected_distance",
+    "compute_gill_lee_broadband",
     "evaluate_observer_geometry",
     "evaluate_observer_geometry_nodes",
     "evaluate_rotor_acoustics",
     "pressure_squared_to_spl",
+    "smooth_maximum_spl",
 ]

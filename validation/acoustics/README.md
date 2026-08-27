@@ -38,3 +38,24 @@ licence status, and any unresolved ambiguity. Production BladeAD tests must not 
 Reference-generation scripts run in the source tool's documented environment and write plain
 CSV or NPZ outputs. Validation scripts run in `rotor_design`. Generated baselines record the
 source repository commit and script version. No generated value replaces a published measurement.
+
+## Test-suite status
+
+Run from the repository in an environment containing CSDL-alpha and the BladeAD dependencies:
+
+```bash
+python -m pytest tests/acoustics -q
+```
+
+The complete suite was rerun on 2026-08-27 in the SPL `rotor_design` Python 3.11 environment:
+
+```text
+61 passed in 138.59s
+```
+
+The run emitted dependency-level CSDL-alpha/NumPy warnings, including three divide-by-zero warnings
+at intermediate graph states, but no test failures. The committed tests cover equations, API and BEM
+integration, validation fixtures, tonal and Gill--Lee broadband paths, multi-observer aggregation,
+and finite-difference verification of direct and production-graph derivatives. Detailed physical
+validation outcomes and limitations remain in `reports/`; passing the software suite does not imply
+that every acoustic source model is accurate across every operating condition.

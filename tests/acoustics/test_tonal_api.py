@@ -164,4 +164,56 @@ def test_real_bem_to_lowson_tonal_api_and_observer_derivative():
         raise_on_error=True,
     )
     assert hanson_errors is not None
+
+    broadband_outputs = evaluate_rotor_acoustics(
+        inputs,
+        bem_outputs,
+        AcousticObserverData(positions=observer_position),
+        RotorAcousticSettings(
+            tonal_enabled=False,
+            thickness_enabled=False,
+            broadband_enabled=True,
+            broadband_center_frequencies=(100.0, 1000.0, 10000.0),
+        ),
+    )
+    assert broadband_outputs.broadband_one_third_octave_spl.shape == (1, 1, 3)
+    assert broadband_outputs.broadband_spl.shape == (1, 1)
+    np.testing.assert_allclose(
+        broadband_outputs.total_pressure_squared.value,
+        broadband_outputs.broadband_pressure_squared.value,
+    )
+    assert np.all(np.isfinite(broadband_outputs.total_spl.value))
+
+    broadband_errors = csdl.derivative_utils.verify_derivatives(
+        [broadband_outputs.total_spl],
+        [rpm, root_chord, observer_position],
+        1.0e-5,
+        print_results=False,
+        raise_on_error=False,
+    )
+    for variable in (rpm, root_chord, observer_position):
+        result = broadband_errors[(broadband_outputs.total_spl, variable)]
+        assert np.linalg.norm(result["value"]) > 1.0e-8
+        assert result["rel_error"] < 5.0e-4
+
+    combined_outputs = evaluate_rotor_acoustics(
+        inputs,
+        bem_outputs,
+        AcousticObserverData(positions=observer_position),
+        RotorAcousticSettings(
+            modes=(1, 2),
+            load_harmonics=tuple(range(11)),
+            tonal_enabled=True,
+            thickness_enabled=True,
+            sears_enabled=True,
+            broadband_enabled=True,
+            broadband_center_frequencies=(100.0, 1000.0, 10000.0),
+        ),
+    )
+    np.testing.assert_allclose(
+        combined_outputs.total_pressure_squared.value,
+        combined_outputs.tonal_pressure_squared.value
+        + combined_outputs.broadband_pressure_squared.value,
+    )
+    assert np.all(combined_outputs.total_spl.value > combined_outputs.tonal_spl.value)
     recorder.stop()

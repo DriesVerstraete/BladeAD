@@ -63,6 +63,13 @@ def test_apc_fixture_dimensions_and_reference_values():
     assert total[-1]["total_spl_db"] == "50.186"
     assert broadband[0]["broadband_spl_db"] == "24.8571428"
     assert broadband[-1]["broadband_spl_db"] == "42.57142"
+    for experimental_angle, driver_index in ((22.5, 3), (45.0, 4)):
+        observer = observers[driver_index]
+        x = float(observer["x_m"])
+        y = float(observer["y_m"])
+        derived_angle = np.rad2deg(np.arctan2(x, abs(y)))
+        assert x >= 0.0
+        np.testing.assert_allclose(derived_angle, experimental_angle, atol=1.0e-12)
 
 
 def test_dji_9443_acoustic_fixture_is_frozen():

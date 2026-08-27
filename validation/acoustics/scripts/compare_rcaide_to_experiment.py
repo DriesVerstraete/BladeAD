@@ -127,16 +127,16 @@ def compare_apc(summary, detail):
                 prediction,
             )
 
-        source_driver_mapping = {45.0: 4, 22.5: 3}
+        resolved_geometry_mapping = {45.0: 4, 22.5: 3}
         for angle, experimental_rows in sorted(broadband_grouped.items()):
             frequencies = [float(row["one_third_octave_center_hz"]) for row in experimental_rows]
             experimental = [float(row["broadband_spl_db"]) for row in experimental_rows]
-            prediction = broadband_spectrum[1, source_driver_mapping[angle], 8:29]
+            prediction = broadband_spectrum[1, resolved_geometry_mapping[angle], 8:29]
             append_comparison(
                 summary,
                 detail,
                 "APC-11x4-4200-RPM",
-                "rcaide_plane_source_source_driver_angle_mapping",
+                "rcaide_plane_source_resolved_geometry_mapping",
                 "broadband_one_third_octave",
                 angle,
                 "frequency_hz",
@@ -192,15 +192,19 @@ def write_markdown(path, summary):
             "Detailed signed errors are in `rcaide_vs_experiment_detailed.csv`; unrounded summary",
             "metrics are in `rcaide_vs_experiment_summary.csv`.",
             "",
-            "## Known mapping limitation",
+            "## Resolved observer mapping",
             "",
-            "For APC broadband data, RCAIDE labels experimental curves as 45 and 22.5 degrees but",
-            "compares them to simulated observer indices 4 and 3, whose driver angle parameters are",
-            "135 and 112.5 degrees. The rows labelled",
-            "`rcaide_plane_source_source_driver_angle_mapping` reproduce that source behaviour and",
-            "must not be interpreted as a resolved physical-angle equivalence.",
+            "The experimental labels are downstream angles from the rotor plane. RCAIDE observer",
+            "indices 4 and 3 have driver parameters 135 and 112.5 degrees, but their Cartesian",
+            "positions resolve to 45 and 22.5 degrees from the rotor plane. The rows labelled",
+            "`rcaide_plane_source_resolved_geometry_mapping` use that physical equivalence.",
         ]
     )
+    marker = "## Physical-validation readiness"
+    if path.exists():
+        existing = path.read_text()
+        if marker in existing:
+            lines.extend(["", existing[existing.index(marker) :].rstrip()])
     path.write_text("\n".join(lines) + "\n")
 
 

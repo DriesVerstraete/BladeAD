@@ -77,3 +77,18 @@ loss, and efficiency; the three-constant model additionally returns current and 
 and later examine smaller propellers for which explicitly supplied three-constant motor data are
 useful. Coefficients remain caller inputs so no motor-size calibration is silently embedded in
 BladeAD. Reference-value, input-validation, and derivative tests cover both models.
+
+## 2026-08-27 — Differentiable rotating-blade box beam
+
+**Files:** `BladeAD/core/structures/`, `tests/structures/`, and
+`validation/structures/README.md`
+
+**What:** added a parameter-driven CSDL-alpha rectangular box-spar model. It couples directly to
+BladeAD's complete-rotor sectional thrust/drag convention, retains azimuthal load cases, integrates
+centrifugal and two-axis bending loads at element inboard faces, and returns mass, section
+properties, raw stress fields, and smooth allowable utilizations.
+
+**Why:** the standalone multidisciplinary rotor optimisation needs structural mass and explicit
+failure constraints without breaking the AD graph. The first model is deliberately a static
+equivalent-isotropic fidelity level; its documented exclusions prevent it being mistaken for a
+composite laminate or aeroelastic analysis.

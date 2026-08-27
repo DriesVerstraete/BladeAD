@@ -7,6 +7,7 @@ from .models import (
     evaluate_motor,
     evaluate_three_constant,
 )
+from .presets import SHAHJAHAN_EMRAX188_CONTINUOUS_TORQUE, SHAHJAHAN_EMRAX188_PARAMETERS
 
 __all__ = [
     "ChebyshevTorqueEnvelope",
@@ -16,4 +17,6 @@ __all__ = [
     "evaluate_mcdonald",
     "evaluate_motor",
     "evaluate_three_constant",
+    "SHAHJAHAN_EMRAX188_CONTINUOUS_TORQUE",
+    "SHAHJAHAN_EMRAX188_PARAMETERS",
 ]

@@ -5,6 +5,8 @@ import pytest
 from BladeAD.core.motor import (
     ChebyshevTorqueEnvelope,
     McDonaldParameters,
+    SHAHJAHAN_EMRAX188_CONTINUOUS_TORQUE,
+    SHAHJAHAN_EMRAX188_PARAMETERS,
     ThreeConstantParameters,
     evaluate_motor,
 )
@@ -140,3 +142,9 @@ def test_chebyshev_torque_envelope_values_and_derivatives():
     )
     assert errors is not None
     recorder.stop()
+
+
+def test_shahjahan_emrax188_preset_matches_paper_scaling():
+    assert SHAHJAHAN_EMRAX188_PARAMETERS.peak_efficiency_rpm == pytest.approx(5628.02036 / 1.89)
+    assert SHAHJAHAN_EMRAX188_PARAMETERS.peak_efficiency_torque == pytest.approx(164.415051 * 1.89)
+    assert SHAHJAHAN_EMRAX188_CONTINUOUS_TORQUE.maximum_rpm == pytest.approx(6500.0 / 1.89)

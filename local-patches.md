@@ -37,3 +37,43 @@ per-run (this patch, done properly instead) or drop the constraint entirely.
 
 Full context: `01-programs/program-evtol-long-range-delivery-drone/03-projects/
 06-rotor-optimisation/decisions/` (BladeAD redesign work, O39).
+
+## 2026-08-26 — Differentiable Gill--Lee broadband acoustics
+
+**Files:** `BladeAD/core/acoustics/broadband/`, `BladeAD/core/acoustics/api.py`,
+`BladeAD/core/acoustics/var_groups.py`, and acoustic validation/tests.
+
+**What:** ported the official `lsdo_acoustics` Gill--Lee empirical one-third-octave model into
+the CSDL-alpha graph, exposed broadband-only and energetically combined tonal+broadband API
+paths, and added equation, derivative, integration, and APC 11x4 validation coverage.
+
+**Why:** the rotor optimiser requires a differentiable broadband contribution before defining
+its production acoustic objective. The upstream model's fixed `0.2R` planform-integration inner
+radius is retained as an explicit setting and default; it is not tuned to the APC data.
+
+**Provenance:** equations ported from official `lsdo_acoustics` commit
+`7c76e0d01a71d59582d9ec3d62493dd7d37bdd69` under its MIT licence.
+
+## 2026-08-26 — Smooth multi-observer SPL aggregation
+
+**Files:** `BladeAD/core/acoustics/aggregation.py`, package exports, and foundation tests.
+
+**What:** added a differentiable log-sum-exp maximum over observer SPL with a user-specified
+worst-case upper-bias bound in dB. Raw per-observer outputs remain unchanged.
+
+**Why:** Gate E requires a smooth multi-observer objective. The parameterisation makes the
+departure from the true maximum explicit and testable rather than hiding an arbitrary KS factor.
+
+## 2026-08-27 — Selectable differentiable motor models
+
+**Files:** `BladeAD/core/motor/`, `tests/motor/`, and `validation/motor/README.md`
+
+**What:** added two parameter-driven CSDL-alpha motor models behind one selector: `mcdonald`,
+McDonald's positive-polynomial speed--torque loss model, and `three_constant`, the standard
+`Kv`--resistance--no-load-current equivalent circuit. Both return shaft power, electrical power,
+loss, and efficiency; the three-constant model additionally returns current and voltage.
+
+**Why:** the standalone rotor study will initially use Shahjahan's multi-kW McDonald calibration
+and later examine smaller propellers for which explicitly supplied three-constant motor data are
+useful. Coefficients remain caller inputs so no motor-size calibration is silently embedded in
+BladeAD. Reference-value, input-validation, and derivative tests cover both models.

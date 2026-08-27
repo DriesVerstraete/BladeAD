@@ -2,29 +2,77 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from typing import Mapping
-
 import csdl_alpha as csdl
 
 
 @dataclass(frozen=True)
 class McDonaldParameters:
-    """Coefficients for ``sum(C_ij * torque**i * angular_speed**j)`` in watts."""
+    """Inputs to Shahjahan's implementation of the McDonald loss map."""
 
-    loss_coefficients: Mapping[tuple[int, int], float]
+    peak_efficiency: float
+    peak_efficiency_rpm: float
+    peak_efficiency_torque: float
+    k0: float
+    c4: float
+    c5: float
+    c6: float
+    c7: float
+    c8: float
+    c9: float
+    c10: float
+    c11: float
+    c12: float
+    efficiency_scale: float = 1.0
 
     def __post_init__(self) -> None:
-        if not self.loss_coefficients:
-            raise ValueError("loss_coefficients must not be empty")
-        for powers, coefficient in self.loss_coefficients.items():
-            if (
-                not isinstance(powers, tuple)
-                or len(powers) != 2
-                or any(not isinstance(power, int) or power < 0 for power in powers)
-            ):
-                raise ValueError("coefficient keys must be non-negative integer (torque, speed) powers")
-            if not math.isfinite(coefficient) or coefficient < 0.0:
-                raise ValueError("McDonald loss coefficients must be finite and non-negative")
+        if not all(math.isfinite(getattr(self, name)) for name in self.__dataclass_fields__):
+            raise ValueError("McDonald parameters must be finite")
+        if not 0.0 < self.peak_efficiency <= 1.0:
+            raise ValueError("peak_efficiency must lie in (0, 1]")
+        if self.peak_efficiency_rpm <= 0.0 or self.peak_efficiency_torque <= 0.0:
+            raise ValueError("peak-efficiency speed and torque must be positive")
+        if self.efficiency_scale <= 0.0:
+            raise ValueError("efficiency_scale must be positive")
+
+    @property
+    def derived_coefficients(self) -> tuple[float, float, float, float]:
+        eta = self.peak_efficiency
+        omega = self.peak_efficiency_rpm * 2.0 * math.pi / 60.0
+        torque = self.peak_efficiency_torque
+        c0 = self.k0 * omega * torque / 6.0 * (1.0 - eta) / eta
+        c1 = -3.0 * c0 / (2.0 * omega) + torque * (1.0 - eta) / (4.0 * eta)
+        c2 = c0 / (2.0 * omega**3) + torque * (1.0 - eta) / (4.0 * eta * omega**2)
+        c3 = omega * (1.0 - eta) / (2.0 * torque * eta)
+        return c0, c1, c2, c3
+
+
+@dataclass(frozen=True)
+class ChebyshevTorqueEnvelope:
+    """Differentiable continuous-torque curve fitted conservatively to motor data."""
+
+    minimum_rpm: float
+    maximum_rpm: float
+    coefficients: tuple[float, ...]
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.minimum_rpm < self.maximum_rpm:
+            raise ValueError("torque-envelope RPM limits are invalid")
+        if not self.coefficients or not all(math.isfinite(value) for value in self.coefficients):
+            raise ValueError("torque-envelope coefficients must be finite and non-empty")
+
+    def evaluate(self, rpm: csdl.Variable) -> csdl.Variable:
+        x = 2.0 * (rpm - self.minimum_rpm) / (self.maximum_rpm - self.minimum_rpm) - 1.0
+        value = self.coefficients[0] + 0.0 * x
+        if len(self.coefficients) == 1:
+            return value
+        previous = 1.0 + 0.0 * x
+        current = x
+        value = value + self.coefficients[1] * current
+        for coefficient in self.coefficients[2:]:
+            following = 2.0 * x * current - previous
+            value = value + coefficient * following
+            previous, current = current, following
+        return value
 
 
 @dataclass(frozen=True)
@@ -61,16 +109,25 @@ def evaluate_mcdonald(
     torque: csdl.Variable,
     parameters: McDonaldParameters,
 ) -> MotorOutputs:
-    """Evaluate McDonald's positive-polynomial loss model."""
+    """Evaluate the full polynomial-and-logarithmic McDonald loss map."""
 
-    power_loss = None
-    for (torque_power, speed_power), coefficient in parameters.loss_coefficients.items():
-        term = coefficient * torque**torque_power * angular_speed**speed_power
-        power_loss = term if power_loss is None else power_loss + term
-
+    c0, c1, c2, c3 = parameters.derived_coefficients
+    fitted_loss = (
+        c0 + c1 * angular_speed + c2 * angular_speed**3 + c3 * torque**2
+        + parameters.c4 * torque
+        + parameters.c5 * angular_speed * torque
+        + parameters.c6 * angular_speed**2
+        + parameters.c7 * angular_speed * torque**2
+        + parameters.c8 * angular_speed**2 * torque
+        + parameters.c9 * angular_speed * csdl.log(angular_speed)
+        + parameters.c10 * torque * csdl.log(torque)
+        + parameters.c11 * csdl.log(angular_speed)
+        + parameters.c12 * csdl.log(torque)
+    )
     shaft_power = angular_speed * torque
-    electrical_power = shaft_power + power_loss
-    efficiency = shaft_power / electrical_power
+    efficiency = parameters.efficiency_scale * shaft_power / (shaft_power + fitted_loss)
+    electrical_power = shaft_power / efficiency
+    power_loss = electrical_power - shaft_power
     return MotorOutputs(
         shaft_power=shaft_power,
         electrical_power=electrical_power,

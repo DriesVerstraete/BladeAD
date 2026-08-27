@@ -1,4 +1,5 @@
 from .models import (
+    ChebyshevTorqueEnvelope,
     McDonaldParameters,
     MotorOutputs,
     ThreeConstantParameters,
@@ -8,6 +9,7 @@ from .models import (
 )
 
 __all__ = [
+    "ChebyshevTorqueEnvelope",
     "McDonaldParameters",
     "MotorOutputs",
     "ThreeConstantParameters",

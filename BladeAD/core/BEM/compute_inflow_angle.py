@@ -12,6 +12,9 @@ class ImplicitModelOutputs:
     tip_loss_factor: csdl.Variable
     Cl: csdl.Variable
     Cd: csdl.Variable
+    alpha: csdl.Variable
+    reynolds_number: csdl.Variable
+    mach_number: csdl.Variable
 
 
 def compute_inflow_angle(
@@ -96,6 +99,9 @@ def compute_inflow_angle(
             tip_loss_factor=F_container,
             Cl=Cl_container,
             Cd=Cd_container,
+            alpha=twist_profile - phi_container,
+            reynolds_number=Re,
+            mach_number=Ma,
         )
 
 
@@ -141,10 +147,12 @@ def compute_inflow_angle(
             tip_loss_factor=F,
             Cl=Cl,
             Cd=Cd,
+            alpha=alpha,
+            reynolds_number=Re,
+            mach_number=Ma,
         )
 
     return implicit_bem_outputs
-
 
 
 

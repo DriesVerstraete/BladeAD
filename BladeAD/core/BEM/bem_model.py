@@ -192,6 +192,9 @@ class BEMModel:
 
         bem_outputs.residual = bem_implicit_outputs.bem_residual
         bem_outputs.sectional_inflow_angle = bem_implicit_outputs.inflow_angle
+        bem_outputs.sectional_angle_of_attack = bem_implicit_outputs.alpha
+        bem_outputs.sectional_reynolds_number = bem_implicit_outputs.reynolds_number
+        bem_outputs.sectional_mach_number = bem_implicit_outputs.mach_number
         bem_outputs.azimuth_angle = pre_process_outputs.azimuth_angle_exp
 
         thrust_vec_exp = pre_process_outputs.thrust_vector_exp

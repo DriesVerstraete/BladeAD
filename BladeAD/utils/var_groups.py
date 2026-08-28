@@ -232,6 +232,9 @@ class RotorAnalysisOutputs(csdl.VariableGroup):
     sectional_inflow_angle = None
     sectional_lift_coefficient: csdl.Variable = None
     sectional_drag_coefficient: csdl.Variable = None
+    sectional_angle_of_attack: csdl.Variable = None
+    sectional_reynolds_number: csdl.Variable = None
+    sectional_mach_number: csdl.Variable = None
     radial_stations: csdl.Variable = None
     radial_element_width: csdl.Variable = None
     radial_integration_weights: csdl.Variable = None

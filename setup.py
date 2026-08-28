@@ -32,10 +32,12 @@ setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     packages=find_packages(),
+    package_data={'BladeAD': ['core/airfoil/data/*.csv', 'core/airfoil/data/*/*.json', 'core/airfoil/data/*/*.pt']},
     python_requires='>=3.7',
     platforms=['any'],
     install_requires=[
         'numpy',
+        'scipy',
         'pytest',
         'myst-nb',
         'pandas',

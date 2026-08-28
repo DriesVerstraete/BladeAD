@@ -1,0 +1,38 @@
+{
+  "name": "mh117_smooth_neural_v1",
+  "source_table": "mh117_completed_viterna_blend_3deg.csv",
+  "seed": 117,
+  "hidden_width": 64,
+  "hidden_layers": 3,
+  "activation": "tanh",
+  "inputs": [
+    "log_reynolds",
+    "alpha_rad"
+  ],
+  "outputs": [
+    "CL",
+    "log_CD"
+  ],
+  "alpha_bounds_rad": [
+    -0.24434609527920614,
+    1.5707963267948966
+  ],
+  "log_reynolds_bounds": [
+    11.918390573078392,
+    15.60727002719233
+  ],
+  "output_mean": [
+    0.6005085908621796,
+    -1.5288280841001016
+  ],
+  "output_scale": [
+    0.5187319399795441,
+    1.818259871547344
+  ],
+  "core_weight": 10,
+  "extended_negative_weight": 5,
+  "near_stall_weight": 5,
+  "post_stall_weight": 1,
+  "best_weighted_mse": 0.0011647007588562307,
+  "epochs_completed": 6000
+}

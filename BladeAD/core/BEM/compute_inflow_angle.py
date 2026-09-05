@@ -83,7 +83,7 @@ def compute_inflow_angle(
                     # Setting up bracketed search
                     eps = 1e-7
                     solver = csdl.nonlinear_solvers.BracketedSearch(max_iter=50, residual_jac_kwargs={'elementwise':True, 'loop': True})
-                    solver.add_state(phi, bem_residual, bracket=(0., np.pi / 2 - eps))
+                    solver.add_state(phi, bem_residual, bracket=(eps, np.pi / 2 - eps))
                     
                     solver.run()
 
@@ -136,7 +136,7 @@ def compute_inflow_angle(
         # Setting up bracketed search
         eps = 1e-7
         solver = csdl.nonlinear_solvers.BracketedSearch(max_iter=50, residual_jac_kwargs={'elementwise':True, 'loop': True})
-        solver.add_state(phi, bem_residual, bracket=(0., np.pi / 2 - eps))
+        solver.add_state(phi, bem_residual, bracket=(eps, np.pi / 2 - eps))
         
         solver.run()
 
@@ -153,6 +153,5 @@ def compute_inflow_angle(
         )
 
     return implicit_bem_outputs
-
 
 

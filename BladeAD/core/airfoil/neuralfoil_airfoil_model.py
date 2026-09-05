@@ -189,6 +189,8 @@ def get_aero_from_kulfan_parameters(
         if len(alpha_shape) != 1:
             raise ValueError(f"alpha_deg must be 1-D, shape (n_cases,); got {alpha_shape}.")
         n = alpha_shape[0]
+        if n == 0:
+            raise ValueError("alpha_deg must contain at least one case; got shape (0,).")
         for name, v in (
             ("Re", Re),
             ("leading_edge_weight", leading_edge_weight),
@@ -350,6 +352,9 @@ class NeuralFoilAirfoilModel:
         reshaped back to the caller's original shape on the way out."""
         del Ma  # unused -- Pass 2 (Mcrit/Mdd compressibility correction)
         shape = alpha.shape if hasattr(alpha, "shape") else (len(alpha),)
+        re_shape = Re.shape if hasattr(Re, "shape") else (len(Re),)
+        if re_shape != shape:
+            raise ValueError(f"alpha and Re must have the same shape; got {shape} and {re_shape}.")
         n_cases = int(onp.prod(shape))
         alpha_flat = csdl.reshape(alpha, (n_cases,)) if hasattr(alpha, "value") else onp.asarray(alpha).reshape(n_cases)
         Re_flat = csdl.reshape(Re, (n_cases,)) if hasattr(Re, "value") else onp.asarray(Re).reshape(n_cases)

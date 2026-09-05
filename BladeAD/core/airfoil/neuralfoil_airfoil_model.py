@@ -9,7 +9,7 @@ backprop needed, unlike the PCHIP/B-spline tabulated models (which wrap `scipy.i
 off the CSDL AD path).
 
 KNOWN APPROXIMATION (not a silent one -- see `06-rotor-optimisation/neuralfoil-csdl-port/
-findings-pass1.md`): `csdl_alpha` has no true hard elementwise min/max/abs -- `csdl.minimum`,
+findings-pass1-partial.md`): `csdl_alpha` has no true hard elementwise min/max/abs -- `csdl.minimum`,
 `csdl.maximum`, and `csdl.absolute` are all smoothed (log-sum-exp-style) approximations with a
 `rho` smoothing parameter (default `rho=20`, which was verified to produce real, non-trivial
 error -- e.g. `Top_Xtr` off by 0.03 absolute at some test points). This is the same class of gap
@@ -20,7 +20,9 @@ primitive (e.g. a small `csdl.CustomExplicitOperation` with a `sign(x)`/indicato
 derivative). **This only affects `Top_Xtr`/`Bot_Xtr` and the boundary-layer outputs** (needed
 for Pass 2's `Cpmin`, not this pass's BladeAD integration) -- `CL`/`CD`/`CM`, the outputs
 `NeuralFoilAirfoilModel.evaluate()` actually returns, never call clip/abs and match the
-reference exactly (verified to ~1e-14 relative, machine precision on the shared arithmetic).
+reference exactly (verified to ~1e-15 ABSOLUTE, machine precision on the shared arithmetic --
+relative error can look large near a reference value close to zero; absolute is the real gate,
+see `_selftest()`).
 
 Explicitly NOT in this module (see
 `06-rotor-optimisation/neuralfoil-csdl-port/port-plan.md` for the full staged plan):
@@ -124,6 +126,10 @@ def get_aero_from_kulfan_parameters(
     Variables, each shape (n_cases,): `analysis_confidence`, `CL`, `CD`, `CM`, `Top_Xtr`,
     `Bot_Xtr`, and `upper_bl_theta_i` / `upper_bl_H_i` / `upper_bl_ue/vinf_i` /
     `lower_bl_theta_i` / `lower_bl_H_i` / `lower_bl_ue/vinf_i` for i in range(32).
+
+    `alpha_deg`/`Re` etc. are expected as plain 1-D arrays or CSDL Variables of shape exactly
+    `(n_cases,)` -- no shape validation is performed; a `(n_cases, 1)` or `(1, n_cases)` input
+    will silently misinfer `n_cases` or broadcast incorrectly. Not yet hardened (Pass 1 gap).
     """
     nn_params = _load_nn_parameters(model_size)
     n_cases = alpha_deg.shape[0] if hasattr(alpha_deg, "shape") else len(alpha_deg)
@@ -236,6 +242,10 @@ class NeuralFoilAirfoilModel:
                 n_crit: float = 9.0, xtr_upper: float = 1.0, xtr_lower: float = 1.0):
         self.upper_weights = onp.asarray(kulfan_parameters["upper_weights"], dtype=float)
         self.lower_weights = onp.asarray(kulfan_parameters["lower_weights"], dtype=float)
+        if self.upper_weights.shape != (8,) or self.lower_weights.shape != (8,):
+            raise ValueError(
+                "NeuralFoil's neural networks expect exactly 8 CST weights per side, got "
+                f"upper={self.upper_weights.shape}, lower={self.lower_weights.shape}.")
         self.leading_edge_weight = float(kulfan_parameters["leading_edge_weight"])
         self.TE_thickness = float(kulfan_parameters["TE_thickness"])
         self.model_size = model_size

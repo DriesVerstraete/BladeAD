@@ -1,12 +1,12 @@
-"""NeuralFoil forward pass ported to CSDL (Pass 1, incompressible net only).
+"""NeuralFoil forward pass and AeroSandbox Mach correction ported to CSDL.
 
 Reuses NeuralFoil's existing trained weights (vendored under
 `data/neuralfoil_weights/`, see that folder's README for provenance) -- no retraining. Ports
 the incompressible-net path of `neuralfoil.main.get_aero_from_kulfan_parameters()`
 (NeuralFoil v0.3.3, Peter Sharpe, MIT license) as native CSDL `Variable` arithmetic, so CSDL's
-own reverse-mode AD gives exact derivatives -- no `csdl.CustomExplicitOperation` / hand-coded
-backprop needed, unlike the PCHIP/B-spline tabulated models (which wrap `scipy.interpolate`,
-off the CSDL AD path).
+own reverse-mode AD gives exact derivatives through the neural net and smooth Mach correction.
+The piecewise wave-drag law uses a narrow `csdl.CustomExplicitOperation` because CSDL has no hard
+conditional primitive; its branch derivatives are analytic.
 
 KNOWN APPROXIMATION, deliberately kept (Pass 1b re-assessment, see
 `06-rotor-optimisation/neuralfoil-csdl-port/findings-pass1.md`): `csdl_alpha` has no true hard
@@ -14,9 +14,9 @@ elementwise min/max/abs -- `csdl.minimum`, `csdl.maximum`, and `csdl.absolute` a
 (log-sum-exp-style) approximations with a `rho` smoothing parameter (default `rho=20`, verified in
 Pass 1a to produce real, non-trivial error -- e.g. `Top_Xtr` off by 0.03 absolute at some test
 points). `rho=1000` narrows this to <1.3e-4 absolute and is used at every clip/abs call site here.
-**This only affects `Top_Xtr`/`Bot_Xtr` and the boundary-layer `theta`/`H` outputs** -- `CL`/`CD`/
-`CM`/`analysis_confidence`, the outputs `NeuralFoilAirfoilModel.evaluate()` actually returns,
-never call clip/abs and match the reference exactly (~1e-15 absolute). A `csdl.CustomExplicitOperation`
+**This only affects `Top_Xtr`/`Bot_Xtr` and the boundary-layer `theta`/`H` outputs**. The raw
+`CL`/`CD`/`CM`/`analysis_confidence` never call clip/abs and match the reference exactly
+(~1e-15 absolute). A `csdl.CustomExplicitOperation`
 exact-clip/exact-abs replacement was prototyped in Pass 1b and deliberately NOT kept: `ue/vinf`
 (what Pass 2's `Cpmin_0`/`mach_crit`/`mach_dd` will be built from, per AeroSandbox's
 `KulfanAirfoil.get_aero_from_neuralfoil()`) is a raw net-output slice that never passes through
@@ -41,11 +41,6 @@ would matter for. Revisit then, not before.
 
 Explicitly NOT in this module (see
 `06-rotor-optimisation/neuralfoil-csdl-port/port-plan.md` for the full staged plan):
-  - Mach as an input -- the raw net has none ("No mach parameter in this version" in the
-    reference source). `evaluate()` accepts `Ma` only for interface parity with the other
-    airfoil models in this package; it is unused here.
-  - The Mcrit/Mdd compressibility correction, and `Cpmin_0` (needs the boundary-layer outputs
-    this module DOES produce, but the softmin/Mach-blend formula itself is Pass 2's job).
   - Airfoil normalisation/rotation, control surfaces, 360-degree post-stall blending -- all
     layered on top of `get_aero_from_kulfan_parameters()` in AeroSandbox's own wrapper, outside
     that function's contract.
@@ -94,6 +89,83 @@ def _sigmoid(x):
 
 def _swish(x):
     return x * _sigmoid(x)
+
+
+def _blend(switch, high, low):
+    weight_high = 0.5 + 0.5 * csdl.tanh(switch)
+    return high * weight_high + low * (1.0 - weight_high)
+
+
+class _WaveDragOperation(csdl.CustomExplicitOperation):
+    def evaluate(self, mach, mach_crit, t_over_c):
+        self.declare_input("mach", mach)
+        self.declare_input("mach_crit", mach_crit)
+        self.declare_input("t_over_c", t_over_c)
+        if mach.shape != mach_crit.shape or mach.shape != t_over_c.shape:
+            raise ValueError("mach, mach_crit, and t_over_c must have identical shapes.")
+        indices = onp.arange(mach.size)
+        output = self.create_output("CD_wave", mach.shape)
+        for name in ("mach", "mach_crit", "t_over_c"):
+            self.declare_derivative_parameters("CD_wave", name, rows=indices, cols=indices)
+        return output
+
+    @staticmethod
+    def _values_and_derivatives(mach, mach_crit, t_over_c):
+        mach = onp.asarray(mach)
+        mach_crit = onp.asarray(mach_crit)
+        t_over_c = onp.asarray(t_over_c)
+        mach_dd = mach_crit + (0.1 / 320.0) ** (1.0 / 3.0)
+        values = onp.empty_like(mach)
+        d_mach = onp.zeros_like(mach)
+        d_mach_crit = onp.zeros_like(mach)
+        d_t_over_c = onp.zeros_like(mach)
+
+        before_crit = mach < mach_crit
+        before_dd = (~before_crit) & (mach < mach_dd)
+        transonic = (~before_crit) & (~before_dd) & (mach < 1.1)
+        supersonic = ~(before_crit | before_dd | transonic)
+        values[before_crit] = 0.0
+
+        delta = mach[before_dd] - mach_crit[before_dd]
+        values[before_dd] = 80.0 * delta ** 4
+        d_mach[before_dd] = 320.0 * delta ** 3
+        d_mach_crit[before_dd] = -320.0 * delta ** 3
+
+        x = mach[transonic]
+        x_a = mach_dd[transonic]
+        thickness = t_over_c[transonic]
+        interval = 1.1 - x_a
+        position = (x - x_a) / interval
+        blend = 0.5 + 0.5 * onp.cos(onp.pi * position)
+        line_a = (x - x_a) * 0.1 + 80.0 * (0.1 / 320.0) ** (4.0 / 3.0)
+        line_b_factor = 0.8 - 6.4 * (x - 1.1)
+        line_b = thickness * line_b_factor
+        values[transonic] = blend * line_a + (1.0 - blend) * line_b
+        d_blend_dx = -0.5 * onp.pi * onp.sin(onp.pi * position) / interval
+        d_mach[transonic] = d_blend_dx * (line_a - line_b) + blend * 0.1 - (1.0 - blend) * 6.4 * thickness
+        d_position_dxa = (x - 1.1) / interval ** 2
+        d_blend_dxa = -0.5 * onp.pi * onp.sin(onp.pi * position) * d_position_dxa
+        d_mach_crit[transonic] = d_blend_dxa * (line_a - line_b) - blend * 0.1
+        d_t_over_c[transonic] = (1.0 - blend) * line_b_factor
+
+        switch = 40.0 * (mach[supersonic] - 1.1)
+        tanh_switch = onp.tanh(switch)
+        weight_high = 0.5 + 0.5 * tanh_switch
+        factor = 0.96 - 0.32 * weight_high
+        values[supersonic] = t_over_c[supersonic] * factor
+        d_mach[supersonic] = -6.4 * t_over_c[supersonic] * (1.0 - tanh_switch ** 2)
+        d_t_over_c[supersonic] = factor
+        return values, d_mach, d_mach_crit, d_t_over_c
+
+    def compute(self, inputs, outputs):
+        outputs["CD_wave"] = self._values_and_derivatives(
+            inputs["mach"], inputs["mach_crit"], inputs["t_over_c"])[0]
+
+    def compute_derivatives(self, inputs, outputs, derivatives):
+        values = self._values_and_derivatives(inputs["mach"], inputs["mach_crit"], inputs["t_over_c"])
+        derivatives["CD_wave", "mach"] = values[1].ravel()
+        derivatives["CD_wave", "mach_crit"] = values[2].ravel()
+        derivatives["CD_wave", "t_over_c"] = values[3].ravel()
 
 
 def _squared_mahalanobis_distance(x):
@@ -157,13 +229,15 @@ def _dup_case0_2d(v, n_cols):
 
 def get_aero_from_kulfan_parameters(
     upper_weights, lower_weights, leading_edge_weight, TE_thickness,
-    alpha_deg, Re, n_crit=9.0, xtr_upper=1.0, xtr_lower=1.0, model_size="small",
+    alpha_deg, Re, mach, max_thickness, n_crit=9.0, xtr_upper=1.0, xtr_lower=1.0,
+    model_size="small",
 ):
     """CSDL port of `neuralfoil.get_aero_from_kulfan_parameters` (incompressible net only).
 
     Per-station (vectorised) inputs -- `n_cases` stations evaluated in one call:
       upper_weights, lower_weights : (n_cases, 8) CSDL Variable or array
-      leading_edge_weight, TE_thickness, alpha_deg, Re : (n_cases,) CSDL Variable or array
+      leading_edge_weight, TE_thickness, alpha_deg, Re, mach : (n_cases,) Variable or array
+      max_thickness : precomputed thickness/chord scalar or (n_cases,) Variable/array
       n_crit, xtr_upper, xtr_lower : Python float (broadcast) or (n_cases,) CSDL Variable/array
 
     `alpha_deg` in degrees, matching the reference package's convention. Returns a dict of CSDL
@@ -195,6 +269,8 @@ def get_aero_from_kulfan_parameters(
             ("Re", Re),
             ("leading_edge_weight", leading_edge_weight),
             ("TE_thickness", TE_thickness),
+            ("mach", mach),
+            ("max_thickness", max_thickness),
             ("n_crit", n_crit),
             ("xtr_upper", xtr_upper),
             ("xtr_lower", xtr_lower),
@@ -220,6 +296,9 @@ def get_aero_from_kulfan_parameters(
                           if _shape_of(TE_thickness) == (1,) else TE_thickness),
             alpha_deg=_dup_case0_1d(alpha_deg),
             Re=_dup_case0_1d(Re) if _shape_of(Re) == (1,) else Re,
+            mach=_dup_case0_1d(mach) if _shape_of(mach) == (1,) else mach,
+            max_thickness=(_dup_case0_1d(max_thickness)
+                           if _shape_of(max_thickness) == (1,) else max_thickness),
             n_crit=n_crit, xtr_upper=xtr_upper, xtr_lower=xtr_lower, model_size=model_size,
         )
         full = get_aero_from_kulfan_parameters(**padded)
@@ -320,15 +399,47 @@ def get_aero_from_kulfan_parameters(
             results[f"{surface}_bl_theta_{i}"] = csdl.reshape(theta[i, :], (n_cases,))
             results[f"{surface}_bl_H_{i}"] = csdl.reshape(h[i, :], (n_cases,))
             results[f"{surface}_bl_ue/vinf_{i}"] = csdl.reshape(ue_vinf[i, :], (n_cases,))
+
+    ue_rows = [results[f"{surface}_bl_ue/vinf_{i}"] for surface in ("upper", "lower") for i in range(N)]
+    cp_candidates = csdl.vstack([csdl.reshape(1.0 - ue ** 2, (1, n_cases)) for ue in ue_rows])
+    cpmin_0 = csdl.minimum(cp_candidates, axes=(0,), rho=100.0)
+    cpmin_0 = csdl.minimum(cpmin_0, onp.zeros(n_cases), rho=1000.0)
+    mach_crit = (
+        1.011571026701678 - cpmin_0
+        + 0.6582431351007195 * (-cpmin_0) ** 0.6724789439840343
+    ) ** -0.5504677038358711
+    mach_dd = mach_crit + (0.1 / 320.0) ** (1.0 / 3.0)
+
+    mach = csdl.reshape(_row(mach, n_cases), (n_cases,))
+    beta_squared_ideal = 1.0 - mach ** 2
+    beta = csdl.maximum(beta_squared_ideal, -beta_squared_ideal, rho=2.0) ** 0.5
+    CL = CL / beta
+    CM = CM / beta
+    cpmin = cpmin_0 / beta
+    buffet_factor = _blend(50.0 * (mach - (mach_dd + 0.04)), _blend((mach - 1.0) / 0.1, 1.0, 0.5), 1.0)
+    cla_supersonic_ratio_factor = _blend((mach - 1.0) / 0.1, 4.0 / (2.0 * onp.pi), 1.0)
+    CL = CL * buffet_factor * cla_supersonic_ratio_factor
+
+    thickness = csdl.reshape(_row(max_thickness, n_cases), (n_cases,))
+    CD = CD + _WaveDragOperation().evaluate(mach, mach_crit, thickness)
+    has_aerodynamic_center_shift = (mach - (mach_dd + 0.06)) / 0.06
+    alpha_rad_1d = csdl.reshape(alpha_rad, (n_cases,))
+    CM = CM + _blend(
+        has_aerodynamic_center_shift,
+        -0.25 * csdl.cos(alpha_rad_1d) * CL - 0.25 * csdl.sin(alpha_rad_1d) * CD,
+        0.0,
+    )
+    results.update(CL=CL, CD=CD, CM=CM, Cpmin=cpmin, Cpmin_0=cpmin_0,
+                   mach_crit=mach_crit, mach_dd=mach_dd)
     return results
 
 
 class NeuralFoilAirfoilModel:
-    """CSDL-native airfoil model using NeuralFoil's incompressible net (Pass 1).
+    """CSDL-native airfoil model using NeuralFoil plus AeroSandbox's Mach correction.
 
-    Matches this package's `evaluate(alpha, Re, Ma)` airfoil-model interface (see
-    `tabulated_airfoil_model.py`); `Ma` is accepted for interface parity but unused (Pass 2).
-    Kulfan parameters for the represented airfoil are fixed at construction time.
+    Matches this package's `evaluate(alpha, Re, Ma)` airfoil-model interface. Kulfan parameters
+    and the offline-computed maximum thickness for the represented airfoil are fixed at
+    construction time.
     """
 
     def __init__(self, kulfan_parameters: dict, model_size: str = "small",
@@ -341,6 +452,9 @@ class NeuralFoilAirfoilModel:
                 f"upper={self.upper_weights.shape}, lower={self.lower_weights.shape}.")
         self.leading_edge_weight = float(kulfan_parameters["leading_edge_weight"])
         self.TE_thickness = float(kulfan_parameters["TE_thickness"])
+        if "max_thickness" not in kulfan_parameters:
+            raise ValueError("kulfan_parameters must include precomputed max_thickness for wave drag.")
+        self.max_thickness = float(kulfan_parameters["max_thickness"])
         self.model_size = model_size
         self.n_crit, self.xtr_upper, self.xtr_lower = n_crit, xtr_upper, xtr_lower
 
@@ -350,18 +464,20 @@ class NeuralFoilAirfoilModel:
         `BEM.compute_inflow_angle`'s non-memory-efficient path, Pass 1c). Flattened to 1-D for
         `get_aero_from_kulfan_parameters` (which only knows a flat `n_cases` axis), then
         reshaped back to the caller's original shape on the way out."""
-        del Ma  # unused -- Pass 2 (Mcrit/Mdd compressibility correction)
         shape = alpha.shape if hasattr(alpha, "shape") else (len(alpha),)
         re_shape = Re.shape if hasattr(Re, "shape") else (len(Re),)
-        if re_shape != shape:
-            raise ValueError(f"alpha and Re must have the same shape; got {shape} and {re_shape}.")
+        ma_shape = Ma.shape if hasattr(Ma, "shape") else (len(Ma),)
+        if re_shape != shape or ma_shape != shape:
+            raise ValueError(f"alpha, Re, and Ma must have the same shape; got {shape}, {re_shape}, and {ma_shape}.")
         n_cases = int(onp.prod(shape))
         alpha_flat = csdl.reshape(alpha, (n_cases,)) if hasattr(alpha, "value") else onp.asarray(alpha).reshape(n_cases)
         Re_flat = csdl.reshape(Re, (n_cases,)) if hasattr(Re, "value") else onp.asarray(Re).reshape(n_cases)
+        Ma_flat = csdl.reshape(Ma, (n_cases,)) if hasattr(Ma, "value") else onp.asarray(Ma).reshape(n_cases)
         upper = onp.tile(self.upper_weights, (n_cases, 1))
         lower = onp.tile(self.lower_weights, (n_cases, 1))
         aero = get_aero_from_kulfan_parameters(
             upper, lower, self.leading_edge_weight, self.TE_thickness, alpha_flat, Re_flat,
+            Ma_flat, self.max_thickness,
             n_crit=self.n_crit, xtr_upper=self.xtr_upper, xtr_lower=self.xtr_lower,
             model_size=self.model_size)
         Cl = aero["CL"] if shape == (n_cases,) else csdl.reshape(aero["CL"], shape)
@@ -369,7 +485,7 @@ class NeuralFoilAirfoilModel:
         return Cl, Cd
 
 
-def _gen_reference_cases(model_size, alphas, res, airfoils):
+def _gen_reference_cases(model_size, alphas, res, machs, airfoils):
     """Precompute Kulfan parameters + reference outputs in the `spl-bricks` env (has
     asb+neuralfoil) for one `model_size`. Needs that env's interpreter as a subprocess --
     this module itself has no asb/neuralfoil dependency."""
@@ -384,21 +500,22 @@ import neuralfoil as nf
 cases = []
 alphas = {alphas!r}
 res = {res!r}
+machs = {machs!r}
 for name in {airfoils!r}:
     af = asb.Airfoil(name)
     ka = af.to_kulfan_airfoil(n_weights_per_side=8)
     kulfan = dict(upper_weights=list(ka.upper_weights), lower_weights=list(ka.lower_weights),
-                  leading_edge_weight=float(ka.leading_edge_weight), TE_thickness=float(ka.TE_thickness))
+                  leading_edge_weight=float(ka.leading_edge_weight), TE_thickness=float(ka.TE_thickness),
+                  max_thickness=float(ka.max_thickness()))
     for a in alphas:
         for re in res:
-            ref = nf.get_aero_from_kulfan_parameters(
-                kulfan_parameters=dict(upper_weights=np.array(kulfan["upper_weights"]),
-                                        lower_weights=np.array(kulfan["lower_weights"]),
-                                        leading_edge_weight=kulfan["leading_edge_weight"],
-                                        TE_thickness=kulfan["TE_thickness"]),
-                alpha=a, Re=re, model_size={model_size!r})
-            cases.append({{"airfoil": name, "kulfan": kulfan, "alpha": a, "Re": re,
-                          "ref": {{k: float(np.asarray(v).reshape(-1)[0]) for k, v in ref.items()}}}})
+            for mach in machs:
+                ref = ka.get_aero_from_neuralfoil(alpha=a, Re=re, mach=mach,
+                                                  model_size={model_size!r},
+                                                  include_360_deg_effects=False)
+                cases.append({{"airfoil": name, "kulfan": kulfan, "alpha": a, "Re": re,
+                              "mach": mach,
+                              "ref": {{k: float(np.asarray(v).reshape(-1)[0]) for k, v in ref.items()}}}})
 print(json.dumps(cases))
 """
     out = subprocess.run(
@@ -414,18 +531,19 @@ def _selftest():
     for the reference values."""
     alphas = [-8.0, -2.0, 0.0, 4.0, 10.0, 16.0]
     res = [2.0e5, 1.0e6, 3.0e6]
+    machs = [0.0, 0.5, 0.75, 0.9, 1.15]
     airfoils = ["mh117", "mh60", "naca0012"]
 
     # CL/CD/CM/analysis_confidence never touch the smoothed clip/abs ops -- exact-tolerance gate.
     # Top_Xtr/Bot_Xtr and the boundary-layer outputs DO (see module docstring, "KNOWN
     # APPROXIMATION") -- gated on a looser absolute error, since relative error is meaningless
     # near a reference value of exactly 0 or 1 (a fully-clipped case).
-    exact_keys = ("CL", "CD", "CM", "analysis_confidence")
+    exact_keys = ("CL", "CD", "CM", "analysis_confidence", "Cpmin", "Cpmin_0", "mach_crit", "mach_dd")
     approx_keys = ("Top_Xtr", "Bot_Xtr")
 
     all_ok = True
     for model_size in sorted(available_model_sizes()):
-        cases = _gen_reference_cases(model_size, alphas, res, airfoils)
+        cases = _gen_reference_cases(model_size, alphas, res, machs, airfoils)
 
         upper = onp.array([c["kulfan"]["upper_weights"] for c in cases])
         lower = onp.array([c["kulfan"]["lower_weights"] for c in cases])
@@ -433,10 +551,13 @@ def _selftest():
         te = onp.array([c["kulfan"]["TE_thickness"] for c in cases])
         alpha = onp.array([c["alpha"] for c in cases])
         Re = onp.array([c["Re"] for c in cases])
+        mach = onp.array([c["mach"] for c in cases])
+        max_thickness = onp.array([c["kulfan"]["max_thickness"] for c in cases])
 
         recorder = csdl.Recorder(inline=True)
         recorder.start()
-        aero = get_aero_from_kulfan_parameters(upper, lower, le, te, alpha, Re, model_size=model_size)
+        aero = get_aero_from_kulfan_parameters(
+            upper, lower, le, te, alpha, Re, mach, max_thickness, model_size=model_size)
         recorder.stop()
 
         print(f"model_size={model_size!r} ({len(cases)} cases)")
@@ -472,7 +593,7 @@ def _selftest():
     return all_ok
 
 
-def _eval_case(upper, lower, le, te, alpha, Re, model_size="small", want_derivs=False):
+def _eval_case(upper, lower, le, te, max_thickness, alpha, Re, mach, model_size="small", want_derivs=False):
     """Run one case's forward pass in its own Recorder/graph, returning (CL, CD, CM) as plain
     floats, and optionally the AD Jacobian of each w.r.t. every input (as a dict of
     {input_name: 1-D numpy array}).
@@ -496,6 +617,8 @@ def _eval_case(upper, lower, le, te, alpha, Re, model_size="small", want_derivs=
     te2 = onp.array([te, 0.01], dtype=float)
     alpha2 = onp.array([alpha, 0.0], dtype=float)
     Re2 = onp.array([Re, 1.0e6], dtype=float)
+    mach2 = onp.array([mach, 0.3], dtype=float)
+    thickness2 = onp.array([max_thickness, 0.12], dtype=float)
 
     rec = csdl.Recorder(inline=True)
     rec.start()
@@ -505,7 +628,9 @@ def _eval_case(upper, lower, le, te, alpha, Re, model_size="small", want_derivs=
     te_v = csdl.Variable(value=te2)
     alpha_v = csdl.Variable(value=alpha2)
     Re_v = csdl.Variable(value=Re2)
-    aero = get_aero_from_kulfan_parameters(upper_v, lower_v, le_v, te_v, alpha_v, Re_v, model_size=model_size)
+    mach_v = csdl.Variable(value=mach2)
+    aero = get_aero_from_kulfan_parameters(
+        upper_v, lower_v, le_v, te_v, alpha_v, Re_v, mach_v, thickness2, model_size=model_size)
     CL, CD, CM = aero["CL"], aero["CD"], aero["CM"]
     out_vals = {"CL": float(CL.value[0]), "CD": float(CD.value[0]), "CM": float(CM.value[0])}
 
@@ -514,7 +639,7 @@ def _eval_case(upper, lower, le, te, alpha, Re, model_size="small", want_derivs=
         return out_vals, None
 
     in_vars = {"upper_weights": upper_v, "lower_weights": lower_v, "leading_edge_weight": le_v,
-               "TE_thickness": te_v, "alpha_deg": alpha_v, "Re": Re_v}
+               "TE_thickness": te_v, "alpha_deg": alpha_v, "Re": Re_v, "mach": mach_v}
     derivs = csdl.derivative([CL, CD, CM], list(in_vars.values()))
     rec.stop()
 
@@ -534,23 +659,26 @@ def _check_derivatives():
     """Pass 1b item 3.4: check CSDL's AD-computed derivatives of CL/CD/CM w.r.t. alpha_deg, Re,
     and each of the 18 Kulfan-parameter inputs, against central-difference FD, at several test
     points spanning the same airfoils/alpha/Re ranges as `_selftest()`."""
-    cases = _gen_reference_cases("small", alphas=[-6.0, 2.0, 12.0], res=[3.0e5, 2.0e6],
+    cases = _gen_reference_cases("small", alphas=[2.0], res=[3.0e5],
+                                  machs=[0.3, 0.7, 0.9, 1.15],
                                   airfoils=["mh117", "naca0012"])
 
     flat_specs = [("upper_weights", 8), ("lower_weights", 8), ("leading_edge_weight", 1),
-                  ("TE_thickness", 1), ("alpha_deg", 1), ("Re", 1)]
+                  ("TE_thickness", 1), ("alpha_deg", 1), ("Re", 1), ("mach", 1)]
 
     overall_max_rel = 0.0
     overall_worst = None
+    max_rel_by_input = {name: 0.0 for name, _ in flat_specs}
     for case in cases:
         base = dict(upper=onp.array(case["kulfan"]["upper_weights"], dtype=float),
                     lower=onp.array(case["kulfan"]["lower_weights"], dtype=float),
                     le=float(case["kulfan"]["leading_edge_weight"]),
                     te=float(case["kulfan"]["TE_thickness"]),
-                    alpha=float(case["alpha"]), Re=float(case["Re"]))
+                    max_thickness=float(case["kulfan"]["max_thickness"]),
+                    alpha=float(case["alpha"]), Re=float(case["Re"]), mach=float(case["mach"]))
         arg_key = {"upper_weights": "upper", "lower_weights": "lower",
                    "leading_edge_weight": "le", "TE_thickness": "te",
-                   "alpha_deg": "alpha", "Re": "Re"}
+                   "alpha_deg": "alpha", "Re": "Re", "mach": "mach"}
 
         _, ad = _eval_case(**base, want_derivs=True)
 
@@ -573,13 +701,15 @@ def _check_derivatives():
                     ad_val = ad[out_name][in_name][comp]
                     denom = max(abs(fd), abs(ad_val), 1e-8)
                     rel_err = abs(fd - ad_val) / denom
+                    max_rel_by_input[in_name] = max(max_rel_by_input[in_name], rel_err)
                     if rel_err > overall_max_rel:
                         overall_max_rel = rel_err
                         overall_worst = (case["airfoil"], case["alpha"], case["Re"],
                                           out_name, in_name, comp, ad_val, fd)
 
-    print(f"AD-vs-FD derivative check: {len(cases)} cases x 6 inputs x 3 outputs")
+    print(f"AD-vs-FD derivative check: {len(cases)} cases x 7 inputs x 3 outputs")
     print(f"  max relative error: {overall_max_rel:.3e}")
+    print(f"  max relative error w.r.t. mach: {max_rel_by_input['mach']:.3e}")
     print(f"  worst case: {overall_worst}")
     ok = overall_max_rel < 1e-4
     print("neuralfoil_airfoil_model PASS 1b derivative check", "OK" if ok else "FAIL")

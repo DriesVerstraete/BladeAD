@@ -39,12 +39,11 @@ anything currently planned) -- unlike Mcrit/Mdd, which structurally never touche
 that is exactly the case the exact-primitive custom op (prototyped, then dropped, in Pass 1b)
 would matter for. Revisit then, not before.
 
-Explicitly NOT in this module (see
+Airfoil normalisation/rotation, control surfaces, and AeroSandbox's 360-degree post-stall blend
+are included. Explicitly NOT in this module (see
 `06-rotor-optimisation/neuralfoil-csdl-port/port-plan.md` for the full staged plan):
-  - Airfoil normalisation/rotation, control surfaces, 360-degree post-stall blending -- all
-    layered on top of `get_aero_from_kulfan_parameters()` in AeroSandbox's own wrapper, outside
-    that function's contract.
-  - Kulfan/CST shape reconstruction. Kulfan parameters arrive as already-fitted numeric arrays
+  - Kulfan/CST shape reconstruction. Kulfan parameters and normalization metadata arrive as
+    already-fitted numeric constants
     (from `asb.Airfoil(name).to_kulfan_airfoil(n_weights_per_side=8)`, run once, offline, in
     plain Python) -- this module never reconstructs x,y coordinates.
 
@@ -53,6 +52,7 @@ Run self-test (verifies against the real Python `neuralfoil` package):
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import csdl_alpha as csdl
@@ -94,6 +94,45 @@ def _swish(x):
 def _blend(switch, high, low):
     weight_high = 0.5 + 0.5 * csdl.tanh(switch)
     return high * weight_high + low * (1.0 - weight_high)
+
+
+def _softmax_pair(a, b, softness=1.0):
+    return softness * csdl.log(csdl.exp(a / softness) + csdl.exp(b / softness))
+
+
+def _post_stall_coefficients(alpha_deg):
+    alpha_rad = alpha_deg * _DEG2RAD
+    sina = csdl.sin(alpha_rad)
+    cosa = csdl.cos(alpha_rad)
+    cd90 = 2.08 + 8.36e-2 * cosa + 4.06e-1 * cosa ** 2
+    cn = cd90 * sina
+    ct = (9.00e-2 - 1.78e-1 * cosa - 2.98e-1 * cosa ** 3) * sina ** 2
+    return cn * cosa + ct * sina, cn * sina - ct * cosa, 0.0 * sina
+
+
+class _PeriodicAngleOperation(csdl.CustomExplicitOperation):
+    def evaluate(self, alpha_deg):
+        self.declare_input("alpha_deg", alpha_deg)
+        output = self.create_output("periodic_alpha_deg", alpha_deg.shape)
+        indices = onp.arange(alpha_deg.size)
+        self.declare_derivative_parameters(
+            "periodic_alpha_deg", "alpha_deg", rows=indices, cols=indices
+        )
+        return output
+
+    def compute(self, inputs, outputs):
+        outputs["periodic_alpha_deg"] = (inputs["alpha_deg"] + 180.0) % 360.0 - 180.0
+
+    def compute_derivatives(self, inputs, outputs, derivatives):
+        derivatives["periodic_alpha_deg", "alpha_deg"] = onp.ones(inputs["alpha_deg"].size)
+
+
+@dataclass(frozen=True)
+class NeuralFoilControlSurface:
+    """Fixed hinge location and downward-positive deflection in degrees."""
+
+    hinge_point: float
+    deflection: float | csdl.Variable
 
 
 class _WaveDragOperation(csdl.CustomExplicitOperation):
@@ -230,15 +269,17 @@ def _dup_case0_2d(v, n_cols):
 def get_aero_from_kulfan_parameters(
     upper_weights, lower_weights, leading_edge_weight, TE_thickness,
     alpha_deg, Re, mach, max_thickness, n_crit=9.0, xtr_upper=1.0, xtr_lower=1.0,
-    model_size="small",
+    model_size="small", control_surfaces=None, include_360_deg_effects=True,
 ):
-    """CSDL port of `neuralfoil.get_aero_from_kulfan_parameters` (incompressible net only).
+    """CSDL port of AeroSandbox's Kulfan NeuralFoil wrapper.
 
     Per-station (vectorised) inputs -- `n_cases` stations evaluated in one call:
       upper_weights, lower_weights : (n_cases, 8) CSDL Variable or array
       leading_edge_weight, TE_thickness, alpha_deg, Re, mach : (n_cases,) Variable or array
       max_thickness : precomputed thickness/chord scalar or (n_cases,) Variable/array
       n_crit, xtr_upper, xtr_lower : Python float (broadcast) or (n_cases,) CSDL Variable/array
+      control_surfaces : optional list of `NeuralFoilControlSurface` objects
+      include_360_deg_effects : include AeroSandbox's post-stall blend, default True
 
     `alpha_deg` in degrees, matching the reference package's convention. Returns a dict of CSDL
     Variables, each shape (n_cases,): `analysis_confidence`, `CL`, `CD`, `CM`, `Top_Xtr`,
@@ -285,6 +326,8 @@ def get_aero_from_kulfan_parameters(
         return n
 
     n_cases = _validated_n_cases()
+    if control_surfaces is None:
+        control_surfaces = []
 
     if n_cases == 1:
         padded = dict(
@@ -300,15 +343,52 @@ def get_aero_from_kulfan_parameters(
             max_thickness=(_dup_case0_1d(max_thickness)
                            if _shape_of(max_thickness) == (1,) else max_thickness),
             n_crit=n_crit, xtr_upper=xtr_upper, xtr_lower=xtr_lower, model_size=model_size,
+            control_surfaces=[
+                NeuralFoilControlSurface(
+                    hinge_point=surface.hinge_point,
+                    deflection=(
+                        _dup_case0_1d(surface.deflection)
+                        if _shape_of(surface.deflection) == (1,)
+                        else surface.deflection
+                    ),
+                )
+                for surface in control_surfaces
+            ],
+            include_360_deg_effects=include_360_deg_effects,
         )
         full = get_aero_from_kulfan_parameters(**padded)
         return {k: csdl.reshape(v[0:1], (1,)) for k, v in full.items()}
 
     nn_params = _load_nn_parameters(model_size)
 
+    alpha_periodic = _PeriodicAngleOperation().evaluate(
+        csdl.reshape(_row(alpha_deg, n_cases), (n_cases,))
+    )
+    effective_d_alpha = 0.0
+    effective_cd_multiplier = 1.0
+    for surface in control_surfaces:
+        if not onp.isfinite(surface.hinge_point) or not 0.0 <= surface.hinge_point <= 1.0:
+            raise ValueError("control-surface hinge_point must be finite and between zero and one")
+        deflection = surface.deflection
+        deflection_shape = _shape_of(deflection)
+        if deflection_shape == (1,) and n_cases > 1:
+            deflection = csdl.expand(deflection, (n_cases,))
+        elif deflection_shape not in ((), (n_cases,)):
+            raise ValueError(
+                f"control-surface deflection must be scalar or shape ({n_cases},); "
+                f"got {deflection_shape}"
+            )
+        effectiveness = 1.0 - max(0.0, surface.hinge_point + 1.0e-16) ** 2.751428551177291
+        effective_d_alpha = effective_d_alpha + deflection * effectiveness
+        deflection_ratio_squared = (deflection / 11.5) ** 2
+        effective_cd_multiplier = effective_cd_multiplier * (
+            2.0 + deflection_ratio_squared - (1.0 + deflection_ratio_squared) ** 0.5
+        )
+    alpha_for_net = alpha_periodic + effective_d_alpha
+
     upper_t = csdl.transpose(upper_weights)  # (8, n_cases)
     lower_t = csdl.transpose(lower_weights)  # (8, n_cases)
-    alpha_rad = _row(alpha_deg, n_cases) * _DEG2RAD
+    alpha_rad = _row(alpha_for_net, n_cases) * _DEG2RAD
     sin2a = csdl.sin(2.0 * alpha_rad)
     cosa = csdl.cos(alpha_rad)
 
@@ -384,9 +464,11 @@ def get_aero_from_kulfan_parameters(
 
     CL = csdl.reshape(y_fused[1, :], (n_cases,)) / 2.0
     CD = csdl.exp((csdl.reshape(y_fused[2, :], (n_cases,)) - 2.0) * 2.0)
+    CD = CD * effective_cd_multiplier
     CM = csdl.reshape(y_fused[3, :], (n_cases,)) / 20.0
 
-    Re_col = csdl.expand(csdl.reshape(_row(Re, n_cases), (n_cases,)), (N, n_cases), "j->ij")
+    re_1d = csdl.reshape(_row(Re, n_cases), (n_cases,))
+    Re_col = csdl.expand(re_1d, (N, n_cases), "j->ij")
     results = {"analysis_confidence": confidence, "CL": CL, "CD": CD, "CM": CM,
               "Top_Xtr": top_xtr, "Bot_Xtr": bot_xtr}
     for surface, base in (("upper", 6), ("lower", 6 + N * 3)):
@@ -403,6 +485,32 @@ def get_aero_from_kulfan_parameters(
     ue_rows = [results[f"{surface}_bl_ue/vinf_{i}"] for surface in ("upper", "lower") for i in range(N)]
     cp_candidates = csdl.vstack([csdl.reshape(1.0 - ue ** 2, (1, n_cases)) for ue in ue_rows])
     cpmin_0 = csdl.minimum(cp_candidates, axes=(0,), rho=100.0)
+    if include_360_deg_effects:
+        cl_separated, cd_separated, cm_separated = _post_stall_coefficients(alpha_periodic)
+        is_separated = _softmax_pair(
+            alpha_periodic - 20.0, -20.0 - alpha_periodic
+        ) / 3.0
+        CL = _blend(is_separated, cl_separated, CL)
+        skin_friction = 0.074 / re_1d ** (1.0 / 5.0)
+        CD = csdl.exp(
+            _blend(
+                is_separated,
+                csdl.log(cd_separated + skin_friction),
+                csdl.log(CD),
+            )
+        )
+        CM = _blend(is_separated, cm_separated, CM)
+        alpha_periodic_rad = alpha_periodic * _DEG2RAD
+        sin_alpha = csdl.sin(alpha_periodic_rad)
+        cpmin_0 = _blend(
+            is_separated, -1.0 - 0.5 * sin_alpha ** 2, cpmin_0
+        )
+        top_xtr = _blend(
+            is_separated, 0.5 - 0.5 * csdl.tanh(10.0 * sin_alpha), top_xtr
+        )
+        bot_xtr = _blend(
+            is_separated, 0.5 + 0.5 * csdl.tanh(10.0 * sin_alpha), bot_xtr
+        )
     cpmin_0 = csdl.minimum(cpmin_0, onp.zeros(n_cases), rho=1000.0)
     mach_crit = (
         1.011571026701678 - cpmin_0
@@ -423,27 +531,32 @@ def get_aero_from_kulfan_parameters(
     thickness = csdl.reshape(_row(max_thickness, n_cases), (n_cases,))
     CD = CD + _WaveDragOperation().evaluate(mach, mach_crit, thickness)
     has_aerodynamic_center_shift = (mach - (mach_dd + 0.06)) / 0.06
-    alpha_rad_1d = csdl.reshape(alpha_rad, (n_cases,))
+    if include_360_deg_effects:
+        has_aerodynamic_center_shift = _softmax_pair(
+            is_separated, has_aerodynamic_center_shift, softness=0.1
+        )
+    alpha_rad_1d = alpha_periodic * _DEG2RAD
     CM = CM + _blend(
         has_aerodynamic_center_shift,
         -0.25 * csdl.cos(alpha_rad_1d) * CL - 0.25 * csdl.sin(alpha_rad_1d) * CD,
         0.0,
     )
     results.update(CL=CL, CD=CD, CM=CM, Cpmin=cpmin, Cpmin_0=cpmin_0,
+                   Top_Xtr=top_xtr, Bot_Xtr=bot_xtr,
                    mach_crit=mach_crit, mach_dd=mach_dd)
     return results
 
 
 class NeuralFoilAirfoilModel:
-    """CSDL-native airfoil model using NeuralFoil plus AeroSandbox's Mach correction.
+    """CSDL-native airfoil model matching AeroSandbox's outer Airfoil wrapper.
 
-    Matches this package's `evaluate(alpha, Re, Ma)` airfoil-model interface. Kulfan parameters
-    and the offline-computed maximum thickness for the represented airfoil are fixed at
-    construction time.
+    Matches this package's radian-based `evaluate(alpha, Re, Ma)` interface. Normalized Kulfan
+    parameters, maximum thickness, and normalization metadata are fixed at construction time.
     """
 
     def __init__(self, kulfan_parameters: dict, model_size: str = "small",
-                n_crit: float = 9.0, xtr_upper: float = 1.0, xtr_lower: float = 1.0):
+                n_crit: float = 9.0, xtr_upper: float = 1.0, xtr_lower: float = 1.0,
+                control_surfaces=None, include_360_deg_effects: bool = True):
         self.upper_weights = onp.asarray(kulfan_parameters["upper_weights"], dtype=float)
         self.lower_weights = onp.asarray(kulfan_parameters["lower_weights"], dtype=float)
         if self.upper_weights.shape != (8,) or self.lower_weights.shape != (8,):
@@ -452,13 +565,29 @@ class NeuralFoilAirfoilModel:
                 f"upper={self.upper_weights.shape}, lower={self.lower_weights.shape}.")
         self.leading_edge_weight = float(kulfan_parameters["leading_edge_weight"])
         self.TE_thickness = float(kulfan_parameters["TE_thickness"])
-        if "max_thickness" not in kulfan_parameters:
-            raise ValueError("kulfan_parameters must include precomputed max_thickness for wave drag.")
+        required_geometry = (
+            "max_thickness", "rotation_angle", "x_translation",
+            "y_translation", "scale_factor",
+        )
+        missing = [name for name in required_geometry if name not in kulfan_parameters]
+        if missing:
+            raise ValueError(
+                "kulfan_parameters must include offline geometry constants: "
+                + ", ".join(missing)
+            )
         self.max_thickness = float(kulfan_parameters["max_thickness"])
+        self.rotation_angle = float(kulfan_parameters["rotation_angle"])
+        self.x_translation = float(kulfan_parameters["x_translation"])
+        self.y_translation = float(kulfan_parameters["y_translation"])
+        self.scale_factor = float(kulfan_parameters["scale_factor"])
+        if not onp.isfinite(self.scale_factor) or self.scale_factor <= 0.0:
+            raise ValueError("scale_factor must be finite and positive")
         self.model_size = model_size
         self.n_crit, self.xtr_upper, self.xtr_lower = n_crit, xtr_upper, xtr_lower
+        self.control_surfaces = [] if control_surfaces is None else list(control_surfaces)
+        self.include_360_deg_effects = include_360_deg_effects
 
-    def evaluate(self, alpha, Re, Ma):
+    def evaluate_all(self, alpha, Re, Ma):
         """`alpha`/`Re` may be any shape -- BladeAD's real BEM call sites pass either a 1-D
         vector or the full `(num_nodes, num_radial, num_azimuthal)` field (confirmed from
         `BEM.compute_inflow_angle`'s non-memory-efficient path, Pass 1c). Flattened to 1-D for
@@ -473,16 +602,38 @@ class NeuralFoilAirfoilModel:
         alpha_flat = csdl.reshape(alpha, (n_cases,)) if hasattr(alpha, "value") else onp.asarray(alpha).reshape(n_cases)
         Re_flat = csdl.reshape(Re, (n_cases,)) if hasattr(Re, "value") else onp.asarray(Re).reshape(n_cases)
         Ma_flat = csdl.reshape(Ma, (n_cases,)) if hasattr(Ma, "value") else onp.asarray(Ma).reshape(n_cases)
+        alpha_normalized_deg = alpha_flat / _DEG2RAD + self.rotation_angle
+        re_normalized = Re_flat / self.scale_factor
         upper = onp.tile(self.upper_weights, (n_cases, 1))
         lower = onp.tile(self.lower_weights, (n_cases, 1))
         aero = get_aero_from_kulfan_parameters(
-            upper, lower, self.leading_edge_weight, self.TE_thickness, alpha_flat, Re_flat,
+            upper, lower, self.leading_edge_weight, self.TE_thickness,
+            alpha_normalized_deg, re_normalized,
             Ma_flat, self.max_thickness,
             n_crit=self.n_crit, xtr_upper=self.xtr_upper, xtr_lower=self.xtr_lower,
-            model_size=self.model_size)
-        Cl = aero["CL"] if shape == (n_cases,) else csdl.reshape(aero["CL"], shape)
-        Cd = aero["CD"] if shape == (n_cases,) else csdl.reshape(aero["CD"], shape)
-        return Cl, Cd
+            model_size=self.model_size, control_surfaces=self.control_surfaces,
+            include_360_deg_effects=self.include_360_deg_effects)
+        delta_alpha_rad = self.rotation_angle * _DEG2RAD
+        x_translation_qc = (
+            -self.x_translation
+            + 0.25 / self.scale_factor * onp.cos(delta_alpha_rad)
+            - 0.25
+        )
+        y_translation_qc = (
+            -self.y_translation
+            + 0.25 / self.scale_factor * onp.sin(-delta_alpha_rad)
+        )
+        aero["CM"] = (
+            aero["CM"] - aero["CL"] * x_translation_qc
+            + aero["CD"] * y_translation_qc
+        )
+        if shape != (n_cases,):
+            aero = {name: csdl.reshape(value, shape) for name, value in aero.items()}
+        return aero
+
+    def evaluate(self, alpha, Re, Ma):
+        aero = self.evaluate_all(alpha, Re, Ma)
+        return aero["CL"], aero["CD"]
 
 
 def _gen_reference_cases(model_size, alphas, res, machs, airfoils):
@@ -557,7 +708,8 @@ def _selftest():
         recorder = csdl.Recorder(inline=True)
         recorder.start()
         aero = get_aero_from_kulfan_parameters(
-            upper, lower, le, te, alpha, Re, mach, max_thickness, model_size=model_size)
+            upper, lower, le, te, alpha, Re, mach, max_thickness,
+            model_size=model_size, include_360_deg_effects=False)
         recorder.stop()
 
         print(f"model_size={model_size!r} ({len(cases)} cases)")
@@ -630,7 +782,8 @@ def _eval_case(upper, lower, le, te, max_thickness, alpha, Re, mach, model_size=
     Re_v = csdl.Variable(value=Re2)
     mach_v = csdl.Variable(value=mach2)
     aero = get_aero_from_kulfan_parameters(
-        upper_v, lower_v, le_v, te_v, alpha_v, Re_v, mach_v, thickness2, model_size=model_size)
+        upper_v, lower_v, le_v, te_v, alpha_v, Re_v, mach_v, thickness2,
+        model_size=model_size, include_360_deg_effects=False)
     CL, CD, CM = aero["CL"], aero["CD"], aero["CM"]
     out_vals = {"CL": float(CL.value[0]), "CD": float(CD.value[0]), "CM": float(CM.value[0])}
 
@@ -716,7 +869,178 @@ def _check_derivatives():
     return ok
 
 
+def _gen_pass3_reference_cases(control_surface=None):
+    import json
+    import subprocess
+
+    surface_expression = "None"
+    if control_surface is not None:
+        surface_expression = (
+            "[asb.ControlSurface(hinge_point="
+            f"{control_surface.hinge_point!r}, deflection={control_surface.deflection!r})]"
+        )
+    script = f"""
+import aerosandbox as asb
+import json
+import numpy as np
+
+cases = []
+for name in ["mh117", "naca0012"]:
+    airfoil = asb.Airfoil(name)
+    normalization = airfoil.normalize(return_dict=True)
+    kulfan = normalization["airfoil"].to_kulfan_airfoil(
+        n_weights_per_side=8, normalize_coordinates=False
+    )
+    parameters = dict(
+        upper_weights=list(kulfan.upper_weights),
+        lower_weights=list(kulfan.lower_weights),
+        leading_edge_weight=float(kulfan.leading_edge_weight),
+        TE_thickness=float(kulfan.TE_thickness),
+        max_thickness=float(kulfan.max_thickness()),
+        rotation_angle=float(normalization["rotation_angle"]),
+        x_translation=float(normalization["x_translation"]),
+        y_translation=float(normalization["y_translation"]),
+        scale_factor=float(normalization["scale_factor"]),
+    )
+    for alpha in [-40, -23, -20, -17, 0, 17, 20, 23, 40, 90, 140, 179, 220]:
+        for reynolds in [3e5, 1e6]:
+            for mach in [0.0, 0.5678, 0.9]:
+                result = airfoil.get_aero_from_neuralfoil(
+                    alpha=alpha, Re=reynolds, mach=mach, model_size="small",
+                    control_surfaces={surface_expression}, include_360_deg_effects=True,
+                )
+                cases.append(dict(
+                    airfoil=name, parameters=parameters, alpha=alpha, Re=reynolds, mach=mach,
+                    reference={{key: float(np.asarray(value).reshape(-1)[0])
+                               for key, value in result.items()}},
+                ))
+print(json.dumps(cases))
+"""
+    result = subprocess.run(
+        ["/opt/anaconda3/envs/spl-bricks/bin/python", "-c", script],
+        capture_output=True, text=True, check=True,
+    )
+    return json.loads(result.stdout)
+
+
+def _evaluate_pass3_cases(cases, control_surfaces=None):
+    outputs = []
+    for airfoil_name in sorted({case["airfoil"] for case in cases}):
+        selected = [case for case in cases if case["airfoil"] == airfoil_name]
+        model = NeuralFoilAirfoilModel(
+            selected[0]["parameters"], model_size="small",
+            control_surfaces=control_surfaces, include_360_deg_effects=True,
+        )
+        recorder = csdl.Recorder(inline=True)
+        recorder.start()
+        aero = model.evaluate_all(
+            onp.deg2rad([case["alpha"] for case in selected]),
+            onp.array([case["Re"] for case in selected]),
+            onp.array([case["mach"] for case in selected]),
+        )
+        recorder.stop()
+        for index, case in enumerate(selected):
+            outputs.append((case, {key: float(onp.asarray(value.value)[index])
+                                   for key, value in aero.items()}))
+    return outputs
+
+
+def _check_pass3_values():
+    keys = ("CL", "CD", "CM", "Cpmin", "Cpmin_0", "mach_crit", "mach_dd",
+            "analysis_confidence", "Top_Xtr", "Bot_Xtr")
+    cases = _gen_pass3_reference_cases()
+    comparisons = _evaluate_pass3_cases(cases)
+    max_abs = {key: 0.0 for key in keys}
+    max_rel = {key: 0.0 for key in keys}
+    for case, output in comparisons:
+        for key in keys:
+            reference = case["reference"][key]
+            error = abs(output[key] - reference)
+            max_abs[key] = max(max_abs[key], error)
+            max_rel[key] = max(max_rel[key], error / (abs(reference) + 1e-9))
+
+    control = NeuralFoilControlSurface(hinge_point=0.75, deflection=12.0)
+    control_cases = _gen_pass3_reference_cases(control)
+    control_comparisons = _evaluate_pass3_cases(control_cases, [control])
+    control_max_abs = {key: 0.0 for key in keys}
+    for case, output in control_comparisons:
+        for key in keys:
+            control_max_abs[key] = max(
+                control_max_abs[key], abs(output[key] - case["reference"][key])
+            )
+
+    sample = cases[:4]
+    implicit_empty = _evaluate_pass3_cases(sample)
+    explicit_empty = _evaluate_pass3_cases(sample, [])
+    empty_identical = all(
+        first_output[key] == second_output[key]
+        for (_, first_output), (_, second_output) in zip(implicit_empty, explicit_empty)
+        for key in keys
+    )
+
+    print(f"PASS 3 outer-Airfoil value check: {len(cases)} cases across 2 airfoils")
+    for key in keys:
+        print(f"  {key:<20} max abs {max_abs[key]:.3e}  max rel {max_rel[key]:.3e}")
+    print("PASS 3 control-surface max absolute errors")
+    for key in keys:
+        print(f"  {key:<20} {control_max_abs[key]:.3e}")
+    print(f"PASS 3 explicit-empty control surfaces bit-identical: {empty_identical}")
+    ok = (
+        all(max_abs[key] < 1e-10 for key in keys[:8])
+        and all(max_abs[key] < 1e-3 for key in keys[8:])
+        and all(control_max_abs[key] < 1e-10 for key in keys[:8])
+        and all(control_max_abs[key] < 1e-3 for key in keys[8:])
+        and empty_identical
+    )
+    print("neuralfoil_airfoil_model PASS 3 value check", "OK" if ok else "FAIL")
+    return ok
+
+
+def _check_pass3_alpha_derivatives():
+    cases = _gen_pass3_reference_cases()
+    parameters = next(case["parameters"] for case in cases if case["airfoil"] == "mh117")
+    model = NeuralFoilAirfoilModel(parameters, model_size="small")
+    maximum_relative_error = 0.0
+    worst = None
+    for alpha_deg in (-23.0, -20.0, -17.0, 17.0, 20.0, 23.0, 60.0, 140.0, 220.0):
+        recorder = csdl.Recorder(inline=True)
+        recorder.start()
+        alpha = csdl.Variable(value=onp.deg2rad(onp.array([alpha_deg, 0.0])))
+        aero = model.evaluate_all(alpha, onp.array([989832.0, 1e6]), onp.array([0.5678, 0.3]))
+        derivatives = csdl.derivative(
+            [aero[key] for key in ("CL", "CD", "CM")], [alpha]
+        )
+        recorder.stop()
+        step = 1e-5
+        values = {}
+        for offset_name, offset in (("plus", step), ("minus", -step)):
+            rec = csdl.Recorder(inline=True)
+            rec.start()
+            shifted = model.evaluate_all(
+                onp.array([onp.deg2rad(alpha_deg) + offset, 0.0]),
+                onp.array([989832.0, 1e6]), onp.array([0.5678, 0.3]),
+            )
+            values[offset_name] = {key: float(shifted[key].value[0]) for key in ("CL", "CD", "CM")}
+            rec.stop()
+        for key in ("CL", "CD", "CM"):
+            ad = float(onp.asarray(derivatives[aero[key], alpha].value)[0, 0])
+            fd = (values["plus"][key] - values["minus"][key]) / (2.0 * step)
+            relative_error = abs(ad - fd) / max(abs(ad), abs(fd), 1e-8)
+            if relative_error > maximum_relative_error:
+                maximum_relative_error = relative_error
+                worst = (alpha_deg, key, ad, fd)
+    print(f"PASS 3 alpha AD-vs-FD max relative error: {maximum_relative_error:.3e}")
+    print(f"PASS 3 alpha AD-vs-FD worst case: {worst}")
+    ok = maximum_relative_error < 1e-4
+    print("neuralfoil_airfoil_model PASS 3 derivative check", "OK" if ok else "FAIL")
+    return ok
+
+
 if __name__ == "__main__":
     ok_multisize = _selftest()
     ok_derivs = _check_derivatives()
-    raise SystemExit(0 if (ok_multisize and ok_derivs) else 1)
+    ok_pass3_values = _check_pass3_values()
+    ok_pass3_derivs = _check_pass3_alpha_derivatives()
+    raise SystemExit(
+        0 if (ok_multisize and ok_derivs and ok_pass3_values and ok_pass3_derivs) else 1
+    )

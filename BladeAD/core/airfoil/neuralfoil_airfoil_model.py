@@ -121,9 +121,38 @@ def _net(x, nn_params):
 
 def _row(v, n_cases):
     """Broadcast a scalar (float) or a length-n_cases CSDL Variable/array to shape (1, n_cases)."""
-    if isinstance(v, (int, float)):
+    if isinstance(v, (int, float, onp.number)):
         v = onp.full(n_cases, float(v))
     return csdl.reshape(v, (1, n_cases))
+
+
+def _shape_of(v):
+    if hasattr(v, "shape"):
+        return tuple(v.shape)
+    if onp.isscalar(v):
+        return ()
+    return (len(v),)
+
+
+def _dup_case0_1d(v):
+    """Duplicate a shape-(1,) input to shape-(2,) by repeating case 0 -- part of the
+    n_cases=1 workaround below. Handles both CSDL Variables (AD-transparent -- no detach,
+    the duplicate stays on the same graph so gradients still flow to the original) and plain
+    numpy arrays/Python scalars."""
+    if hasattr(v, "value"):
+        row = csdl.reshape(v, (1,))
+        return csdl.reshape(csdl.vstack([row, row]), (2,))
+    arr = onp.atleast_1d(onp.asarray(v, dtype=float))
+    return onp.concatenate([arr, arr])
+
+
+def _dup_case0_2d(v, n_cols):
+    """Same as `_dup_case0_1d` but for a shape-(1, n_cols) input (the Kulfan weight arrays)."""
+    if hasattr(v, "value"):
+        row = csdl.reshape(v, (1, n_cols))
+        return csdl.vstack([row, row])
+    arr = onp.asarray(v, dtype=float).reshape(1, n_cols)
+    return onp.vstack([arr, arr])
 
 
 def get_aero_from_kulfan_parameters(
@@ -146,25 +175,55 @@ def get_aero_from_kulfan_parameters(
     `(n_cases,)`; `upper_weights`/`lower_weights` exactly `(n_cases, 8)`. Shapes are validated
     up front (Pass 1b hardening -- Pass 1a left this unchecked, risking a `(n_cases, 1)` or
     `(1, n_cases)` input silently misinferring `n_cases` or broadcasting wrong).
+
+    `n_cases=1` is handled by an internal duplicate-and-slice workaround (Pass 1c) for a real
+    `csdl_alpha` bug found in Pass 1b: a `(1,1)`-shape Variable silently squeezes to `(1,)` on
+    scalar multiplication, which otherwise breaks this function's internal `csdl.vstack` at
+    exactly `n_cases=1`. Confirmed reachable in production BladeAD usage:
+    `BEM.compute_inflow_angle`'s `memory_efficiency=True` path calls `airfoil_model.evaluate()`
+    once per blade station with a scalar `Re[i, j, k]` slice, i.e. `n_cases=1`. See
+    `06-rotor-optimisation/neuralfoil-csdl-port/findings-pass1c.md`.
     """
+    def _validated_n_cases():
+        alpha_shape = _shape_of(alpha_deg)
+        if len(alpha_shape) != 1:
+            raise ValueError(f"alpha_deg must be 1-D, shape (n_cases,); got {alpha_shape}.")
+        n = alpha_shape[0]
+        for name, v in (
+            ("Re", Re),
+            ("leading_edge_weight", leading_edge_weight),
+            ("TE_thickness", TE_thickness),
+            ("n_crit", n_crit),
+            ("xtr_upper", xtr_upper),
+            ("xtr_lower", xtr_lower),
+        ):
+            shape = _shape_of(v)
+            if shape not in ((n,), ()):  # allow a true scalar for a broadcast constant
+                raise ValueError(f"{name} must be shape ({n},) or a scalar; got {shape}.")
+        for name, v in (("upper_weights", upper_weights), ("lower_weights", lower_weights)):
+            shape = _shape_of(v)
+            if shape != (n, 8):
+                raise ValueError(f"{name} must be shape ({n}, 8); got {shape}.")
+        return n
+
+    n_cases = _validated_n_cases()
+
+    if n_cases == 1:
+        padded = dict(
+            upper_weights=_dup_case0_2d(upper_weights, 8),
+            lower_weights=_dup_case0_2d(lower_weights, 8),
+            leading_edge_weight=(_dup_case0_1d(leading_edge_weight)
+                                  if _shape_of(leading_edge_weight) == (1,) else leading_edge_weight),
+            TE_thickness=(_dup_case0_1d(TE_thickness)
+                          if _shape_of(TE_thickness) == (1,) else TE_thickness),
+            alpha_deg=_dup_case0_1d(alpha_deg),
+            Re=_dup_case0_1d(Re) if _shape_of(Re) == (1,) else Re,
+            n_crit=n_crit, xtr_upper=xtr_upper, xtr_lower=xtr_lower, model_size=model_size,
+        )
+        full = get_aero_from_kulfan_parameters(**padded)
+        return {k: csdl.reshape(v[0:1], (1,)) for k, v in full.items()}
+
     nn_params = _load_nn_parameters(model_size)
-
-    def _shape_of(v):
-        return tuple(v.shape) if hasattr(v, "shape") else (len(v),)
-
-    alpha_shape = _shape_of(alpha_deg)
-    if len(alpha_shape) != 1:
-        raise ValueError(f"alpha_deg must be 1-D, shape (n_cases,); got {alpha_shape}.")
-    n_cases = alpha_shape[0]
-
-    for name, v in (("Re", Re), ("leading_edge_weight", leading_edge_weight), ("TE_thickness", TE_thickness)):
-        shape = _shape_of(v)
-        if shape not in ((n_cases,), ()):  # allow a true scalar for a broadcast constant
-            raise ValueError(f"{name} must be shape ({n_cases},) or a scalar; got {shape}.")
-    for name, v in (("upper_weights", upper_weights), ("lower_weights", lower_weights)):
-        shape = _shape_of(v)
-        if shape != (n_cases, 8):
-            raise ValueError(f"{name} must be shape ({n_cases}, 8); got {shape}.")
 
     upper_t = csdl.transpose(upper_weights)  # (8, n_cases)
     lower_t = csdl.transpose(lower_weights)  # (8, n_cases)
@@ -284,15 +343,25 @@ class NeuralFoilAirfoilModel:
         self.n_crit, self.xtr_upper, self.xtr_lower = n_crit, xtr_upper, xtr_lower
 
     def evaluate(self, alpha, Re, Ma):
+        """`alpha`/`Re` may be any shape -- BladeAD's real BEM call sites pass either a 1-D
+        vector or the full `(num_nodes, num_radial, num_azimuthal)` field (confirmed from
+        `BEM.compute_inflow_angle`'s non-memory-efficient path, Pass 1c). Flattened to 1-D for
+        `get_aero_from_kulfan_parameters` (which only knows a flat `n_cases` axis), then
+        reshaped back to the caller's original shape on the way out."""
         del Ma  # unused -- Pass 2 (Mcrit/Mdd compressibility correction)
-        n_cases = alpha.shape[0] if hasattr(alpha, "shape") else len(alpha)
+        shape = alpha.shape if hasattr(alpha, "shape") else (len(alpha),)
+        n_cases = int(onp.prod(shape))
+        alpha_flat = csdl.reshape(alpha, (n_cases,)) if hasattr(alpha, "value") else onp.asarray(alpha).reshape(n_cases)
+        Re_flat = csdl.reshape(Re, (n_cases,)) if hasattr(Re, "value") else onp.asarray(Re).reshape(n_cases)
         upper = onp.tile(self.upper_weights, (n_cases, 1))
         lower = onp.tile(self.lower_weights, (n_cases, 1))
         aero = get_aero_from_kulfan_parameters(
-            upper, lower, self.leading_edge_weight, self.TE_thickness, alpha, Re,
+            upper, lower, self.leading_edge_weight, self.TE_thickness, alpha_flat, Re_flat,
             n_crit=self.n_crit, xtr_upper=self.xtr_upper, xtr_lower=self.xtr_lower,
             model_size=self.model_size)
-        return aero["CL"], aero["CD"]
+        Cl = aero["CL"] if shape == (n_cases,) else csdl.reshape(aero["CL"], shape)
+        Cd = aero["CD"] if shape == (n_cases,) else csdl.reshape(aero["CD"], shape)
+        return Cl, Cd
 
 
 def _gen_reference_cases(model_size, alphas, res, airfoils):

@@ -128,3 +128,31 @@ context: `06-rotor-optimisation/decisions/2026-09-06-shahjahan-proprotor-csdl-op
 
 **Consequence if not patched:** the CSDL/BladeAD rotor optimiser is stuck with a uniform grid
 and must run ~n=96 for converged tip-region loading where a cosine n≈48 would do.
+
+## 2026-09-06 — Opt-in Reynolds clamp for tabulated airfoil polars
+
+**Branch:** `neuralfoil-csdl-pass1`.
+
+**File:** `BladeAD/core/airfoil/tabulated_airfoil_model.py`.
+
+**What:** `_PolarSurface` gained a class attribute ``clamp_reynolds`` (default ``False``). When
+left False, ``_prepare`` raises on out-of-range Re exactly as before. When an instance sets it
+True, out-of-range Re is clamped into ``[reynolds[0], reynolds[-1]]`` with a one-shot
+``RuntimeWarning`` instead of raising -- symmetric with the low-end alpha clamp
+``_prepare`` already applies unconditionally.
+
+**Why:** a gradient-based optimiser transiently probes Re below the NeuralFoil table floor
+(30 000) during the SLSQP search -- most sharply with a hover-noise objective, which drives tip
+speed down. A hard raise there aborts the entire solve. The converged design is steered back
+in-range by the thrust / Cl / noise constraints, and its outboard sectional Re is verified
+in-range separately (the tip-envelope diagnostic in ``optimize_shahjahan_stage1.py``).
+``MachCorrectedBSplineAirfoilModel`` (the Shahjahan optimiser's airfoil model) sets
+``self.surface.clamp_reynolds = True``; nothing else does, so validation / accuracy uses keep
+the strict behaviour.
+
+**Verification:** pytest 86/86 (default path unchanged); the Shahjahan ``acoustic-only`` and
+``hover-only --with-acoustics`` solves both converge with all constraints satisfied and
+converged-design outboard Re well inside the table (5e5--2.5e6).
+
+**Consequence if not patched:** any BladeAD gradient optimisation with a tabulated-polar airfoil
+model can die mid-solve the first time SLSQP steps outside the Re table, with no recovery.

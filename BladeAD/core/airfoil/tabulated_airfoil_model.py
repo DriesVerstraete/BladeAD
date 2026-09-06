@@ -1,3 +1,4 @@
+import warnings
 from pathlib import Path
 
 import csdl_alpha as csdl
@@ -11,6 +12,14 @@ _DEFAULT_MH117_TABLE = (
 
 
 class _PolarSurface:
+    # When True, out-of-range Reynolds numbers are clamped to the table span
+    # (with a one-shot warning) instead of raising. Default False keeps the
+    # strict behaviour for validation/accuracy uses; gradient-based optimisers
+    # that transiently probe outside the table set this True on the instance --
+    # the alpha low-end is already clamped unconditionally just below.
+    clamp_reynolds = False
+    _warned_reynolds_clamp = False
+
     def __init__(self, table_path):
         data = np.genfromtxt(table_path, delimiter=",", names=True, encoding=None)
         self.reynolds = np.unique(data["reynolds"])
@@ -33,12 +42,22 @@ class _PolarSurface:
         below_physical_domain = requested_alpha_deg < self.alpha_deg[0]
         alpha_deg = np.maximum(requested_alpha_deg, self.alpha_deg[0])
         reynolds_flat = reynolds.ravel()
-        if np.any(reynolds_flat < self.reynolds[0]) or np.any(
+        out_of_range = np.any(reynolds_flat < self.reynolds[0]) or np.any(
             reynolds_flat > self.reynolds[-1]
-        ):
-            raise ValueError(
-                f"Re is outside [{self.reynolds[0]:g}, {self.reynolds[-1]:g}]."
-            )
+        )
+        if out_of_range:
+            if not self.clamp_reynolds:
+                raise ValueError(
+                    f"Re is outside [{self.reynolds[0]:g}, {self.reynolds[-1]:g}]."
+                )
+            if not _PolarSurface._warned_reynolds_clamp:
+                warnings.warn(
+                    f"Re outside [{self.reynolds[0]:g}, {self.reynolds[-1]:g}] clamped to "
+                    "the table span (further occurrences silenced).",
+                    RuntimeWarning,
+                )
+                _PolarSurface._warned_reynolds_clamp = True
+            reynolds_flat = np.clip(reynolds_flat, self.reynolds[0], self.reynolds[-1])
         if np.any(requested_alpha_deg > self.alpha_deg[-1]):
             raise ValueError(
                 f"alpha exceeds {self.alpha_deg[-1]:g} deg."

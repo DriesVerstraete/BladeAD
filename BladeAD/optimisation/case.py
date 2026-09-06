@@ -190,12 +190,16 @@ def _validate(case, case_dir):
     specs = parse_objectives(case["objectives"])   # raises on a malformed spec / bad proxy count
     if any(s.name == "electrical_power" for s in specs if s.role != "reserved"):
         m = case.get("motor")
-        if not isinstance(m, dict) or m.get("model") not in ("placebo", "mcdonald", "three_constant"):
+        if not isinstance(m, dict) or m.get("model") not in ("placebo", "mcdonald", "emrax188"):
             raise ValueError(
                 "objective 'electrical_power' needs case['motor'] = "
-                "{'model': 'placebo'|'mcdonald'|'three_constant', ...}")
+                "{'model': 'placebo'|'mcdonald'|'emrax188', ...}")
         if m["model"] == "placebo" and not (0.0 < float(m.get("efficiency", 0.0)) <= 1.0):
             raise ValueError("motor 'placebo' needs efficiency in (0, 1]")
+        if m["model"] in ("mcdonald", "emrax188"):
+            for kk in ("k_hover", "k_cruise"):
+                if kk in m and not (isinstance(m[kk], (int, float)) and m[kk] > 0.0):
+                    raise ValueError(f"motor {kk!r} must be a positive number")
 
     af = case["airfoil"]
     tbl = af.get("table_dir")

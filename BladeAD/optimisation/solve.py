@@ -49,6 +49,54 @@ from .acoustics import (
 )
 
 _CRUISE_P_SCALER = 1e-4   # brings ~8 kW cruise power to O(1)
+_RPM_TO_RAD = 2.0 * np.pi / 60.0
+
+
+@dataclass(frozen=True)
+class MotorPoint:
+    """One design point through the case motor model. `torque_margin` is
+    Q / (k * Q_continuous(rpm)) -- feasible when <= 1 -- or None for `placebo`
+    / no-motor (which carry no speed-dependent envelope)."""
+    electrical_power: object
+    efficiency: object
+    torque: object
+    torque_margin: object
+
+
+def evaluate_case_motor(motor_cfg, rpm, shaft_power, *, overload):
+    """Map a rotor design point (`rpm`, `shaft_power` as csdl scalars) to its
+    motor electrical draw + continuous-torque margin.
+
+      placebo            -- fixed efficiency, no envelope (torque_margin None).
+      mcdonald / emrax188 -- McDonald loss map for the paper-scaled EMRAX-188
+                            (`SHAHJAHAN_EMRAX188_PARAMETERS`) + its
+                            continuous-torque envelope; `overload` is the
+                            multiplier on the continuous line permitted here
+                            (Shahjahan 2024: 1.7 for hover / emergency hover /
+                            transition, 1.0 for cruise).
+    """
+    omega = rpm * _RPM_TO_RAD
+    torque = shaft_power / omega
+    model = (motor_cfg or {}).get("model")
+    if model == "placebo":
+        eta = float(motor_cfg.get("efficiency", 0.95))
+        return MotorPoint(shaft_power / eta, eta, torque, None)
+    if model in ("mcdonald", "emrax188"):
+        from BladeAD.core.motor import (
+            evaluate_motor,
+            SHAHJAHAN_EMRAX188_PARAMETERS,
+            SHAHJAHAN_EMRAX188_CONTINUOUS_TORQUE,
+        )
+        # McDonald loss map takes log(torque)/log(omega): floor torque at 1 Nm
+        # so an SLSQP probe to a near-zero-power point cannot produce a NaN.
+        safe_torque = csdl.maximum(torque, csdl.Variable(value=np.array([1.0])))
+        out = evaluate_motor("mcdonald", omega, safe_torque, SHAHJAHAN_EMRAX188_PARAMETERS)
+        q_continuous = SHAHJAHAN_EMRAX188_CONTINUOUS_TORQUE.evaluate(rpm)
+        return MotorPoint(out.electrical_power, out.efficiency, torque,
+                          torque / (float(overload) * q_continuous))
+    # no motor configured -> shaft power as a stand-in (the electrical_power
+    # objective is guarded by case._validate, so this never feeds an objective).
+    return MotorPoint(shaft_power * 1.0, 1.0, torque, None)
 
 
 @dataclass(frozen=True)
@@ -312,24 +360,29 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
     cruise_max_cl.set_as_constraint(upper=constraints["cl_max"], scaler=1.0)
 
     # --- motor: shaft torque/speed -> electrical input power ---
-    # step 1a is a PLACEBO (fixed efficiency); a real BladeAD motor model
-    # (mcdonald / three_constant, + torque-RPM envelope) is step 1b.
-    _RPM_TO_RAD = 2.0 * np.pi / 60.0
-    hover_omega = hover_rpm * _RPM_TO_RAD
-    cruise_omega = cruise_rpm * _RPM_TO_RAD
-    hover_torque = hover_out.total_power / hover_omega       # P_shaft / omega
-    cruise_torque = cruise_out.total_power / cruise_omega
+    # step 1a is a PLACEBO (fixed efficiency); step 1b is the real McDonald
+    # loss map for the paper-scaled EMRAX-188 (`mcdonald` / alias `emrax188`),
+    # plus its speed-dependent continuous-torque envelope enforced as a
+    # constraint (Q <= k * Q_continuous(rpm), k = 1.7 hover / 1.0 cruise --
+    # Shahjahan 2024 raises the continuous line to 170% for hover/transition).
     motor_cfg = case.get("motor") or {}
-    if motor_cfg.get("model") == "placebo":
-        eta_motor = float(motor_cfg.get("efficiency", 0.95))
-        hover_electrical_power = hover_out.total_power / eta_motor
-        cruise_electrical_power = cruise_out.total_power / eta_motor
+    hover_motor = evaluate_case_motor(motor_cfg, hover_rpm, hover_out.total_power,
+                                      overload=motor_cfg.get("k_hover", 1.7))
+    cruise_motor = evaluate_case_motor(motor_cfg, cruise_rpm, cruise_out.total_power,
+                                       overload=motor_cfg.get("k_cruise", 1.0))
+    hover_torque, cruise_torque = hover_motor.torque, cruise_motor.torque
+    hover_motor_eff, cruise_motor_eff = hover_motor.efficiency, cruise_motor.efficiency
+    hover_electrical_power = hover_motor.electrical_power
+    cruise_electrical_power = cruise_motor.electrical_power
+    hover_torque_margin, cruise_torque_margin = hover_motor.torque_margin, cruise_motor.torque_margin
+    if cruise_motor_eff is None or isinstance(cruise_motor_eff, float):
+        eta_motor = float(cruise_motor_eff) if cruise_motor_eff is not None else 1.0
     else:
-        # no motor configured -> report shaft power as a stand-in (electrical_power
-        # objective is guarded by case._validate, so this branch never feeds it)
-        eta_motor = 1.0
-        hover_electrical_power = hover_out.total_power * 1.0
-        cruise_electrical_power = cruise_out.total_power * 1.0
+        eta_motor = float(cruise_motor_eff.value[0])   # representative scalar (back-compat field)
+    if hover_torque_margin is not None and not pinned:
+        hover_torque_margin.set_as_constraint(upper=1.0, scaler=1.0)
+    if cruise_torque_margin is not None:
+        cruise_torque_margin.set_as_constraint(upper=1.0, scaler=1.0)
 
     # the physical result quantities each objective slot can name
     result_vars = {
@@ -426,6 +479,9 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         "hover max_cl <= limit": hover_max_cl.value[0] <= constraints["cl_max"] + 1e-3,
         "cruise max_cl <= limit": cruise_max_cl.value[0] <= constraints["cl_max"] + 1e-3,
     }
+    if hover_torque_margin is not None:
+        checks["hover motor torque within envelope"] = float(hover_torque_margin.value[0]) <= 1.0 + 1e-3
+        checks["cruise motor torque within envelope"] = float(cruise_torque_margin.value[0]) <= 1.0 + 1e-3
     acoustics = None
     if acoustic_bundle is not None:
         def _s(v):
@@ -497,10 +553,18 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         "cruise_power": float(cruise_out.total_power.value[0]),
         "motor_model": motor_cfg.get("model"),
         "motor_efficiency": eta_motor,
+        "hover_motor_efficiency": (float(hover_motor_eff.value[0])
+                                   if hasattr(hover_motor_eff, "value") else hover_motor_eff),
+        "cruise_motor_efficiency": (float(cruise_motor_eff.value[0])
+                                    if hasattr(cruise_motor_eff, "value") else cruise_motor_eff),
         "hover_electrical_power": float(hover_electrical_power.value[0]),
         "cruise_electrical_power": float(cruise_electrical_power.value[0]),
         "hover_torque_nm": float(hover_torque.value[0]),
         "cruise_torque_nm": float(cruise_torque.value[0]),
+        "hover_torque_margin": (float(hover_torque_margin.value[0])
+                                if hover_torque_margin is not None else None),
+        "cruise_torque_margin": (float(cruise_torque_margin.value[0])
+                                 if cruise_torque_margin is not None else None),
         "taper": float(taper.value[0]),
         "twist_washout_deg": float(np.rad2deg(twist_washout.value[0])),
         "hover_max_sectional_cl": float(hover_max_cl.value[0]),

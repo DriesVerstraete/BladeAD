@@ -161,7 +161,8 @@ def run_case_dir(case_dir, **opts):
 
 
 # quantity name (result-dict dotted key or proxy_min_key) -> objective scaler
-_OBJ_SCALER = {"cruise_power": _CRUISE_P_SCALER}
+_OBJ_SCALER = {"cruise_power": _CRUISE_P_SCALER,
+               "cruise_electrical_power": _CRUISE_P_SCALER}
 
 
 def _dotted(d, path):
@@ -310,12 +311,34 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
     cruise_out.total_thrust.set_as_constraint(equals=cruise.thrust, scaler=1e-3)
     cruise_max_cl.set_as_constraint(upper=constraints["cl_max"], scaler=1.0)
 
+    # --- motor: shaft torque/speed -> electrical input power ---
+    # step 1a is a PLACEBO (fixed efficiency); a real BladeAD motor model
+    # (mcdonald / three_constant, + torque-RPM envelope) is step 1b.
+    _RPM_TO_RAD = 2.0 * np.pi / 60.0
+    hover_omega = hover_rpm * _RPM_TO_RAD
+    cruise_omega = cruise_rpm * _RPM_TO_RAD
+    hover_torque = hover_out.total_power / hover_omega       # P_shaft / omega
+    cruise_torque = cruise_out.total_power / cruise_omega
+    motor_cfg = case.get("motor") or {}
+    if motor_cfg.get("model") == "placebo":
+        eta_motor = float(motor_cfg.get("efficiency", 0.95))
+        hover_electrical_power = hover_out.total_power / eta_motor
+        cruise_electrical_power = cruise_out.total_power / eta_motor
+    else:
+        # no motor configured -> report shaft power as a stand-in (electrical_power
+        # objective is guarded by case._validate, so this branch never feeds it)
+        eta_motor = 1.0
+        hover_electrical_power = hover_out.total_power * 1.0
+        cruise_electrical_power = cruise_out.total_power * 1.0
+
     # the physical result quantities each objective slot can name
     result_vars = {
         "figure_of_merit": hover_out.figure_of_merit,
         "cruise_efficiency": cruise_out.efficiency,
         "cruise_power": cruise_out.total_power,
         "hover_power": hover_out.total_power,
+        "cruise_electrical_power": cruise_electrical_power,
+        "hover_electrical_power": hover_electrical_power,
     }
     if acoustic_bundle is not None:
         result_vars["acoustics.hover_ospl_db"] = acoustic_bundle.hover_ospl
@@ -431,6 +454,8 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         "figure_of_merit": fm, "cruise_efficiency": eta,
         "cruise_power": float(cruise_out.total_power.value[0]),
         "hover_power": float(hover_out.total_power.value[0]),
+        "cruise_electrical_power": float(cruise_electrical_power.value[0]),
+        "hover_electrical_power": float(hover_electrical_power.value[0]),
         "acoustics": acoustics,
     }
     objective_values = {}
@@ -470,6 +495,12 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         "cruise_efficiency": eta,
         "hover_power": float(hover_out.total_power.value[0]),
         "cruise_power": float(cruise_out.total_power.value[0]),
+        "motor_model": motor_cfg.get("model"),
+        "motor_efficiency": eta_motor,
+        "hover_electrical_power": float(hover_electrical_power.value[0]),
+        "cruise_electrical_power": float(cruise_electrical_power.value[0]),
+        "hover_torque_nm": float(hover_torque.value[0]),
+        "cruise_torque_nm": float(cruise_torque.value[0]),
         "taper": float(taper.value[0]),
         "twist_washout_deg": float(np.rad2deg(twist_washout.value[0])),
         "hover_max_sectional_cl": float(hover_max_cl.value[0]),

@@ -63,7 +63,7 @@ _REQUIRED_TOP = ("rotor", "operating", "bounds", "constraints", "airfoil",
 #                  actually minimises as a stand-in.  May equal result_key.
 #   label        : plot axis label (default: name)
 
-_RESERVED_OBJECTIVE_NAMES = ("electrical_power",)     # step 4 slot, no solver code yet
+_RESERVED_OBJECTIVE_NAMES = ()     # (structural / transition slots go here when added)
 
 # back-compat: the three names the frozen scripts / archived cases used as a
 # plain string list map to these canonical specs.
@@ -75,8 +75,12 @@ _CANONICAL_SPECS = {
                     "label": "cruise efficiency"},
     "hover_noise": {"name": "hover_noise", "result_key": "acoustics.hover_ospl_db",
                     "goal": "min", "role": "cap", "label": "hover noise (dB)"},
-    "electrical_power": {"name": "electrical_power", "result_key": "electrical_power",
-                         "goal": "min", "role": "reserved", "label": "electrical power (W)"},
+    # alternative proxy to eta_cruise: minimise cruise electrical input power.
+    # needs case["motor"] (placebo = fixed efficiency, or a real BladeAD motor model).
+    "electrical_power": {"name": "electrical_power", "result_key": "cruise_electrical_power",
+                         "goal": "min", "role": "proxy",
+                         "proxy_min_key": "cruise_electrical_power",
+                         "label": "cruise electrical power (W)"},
 }
 
 _EPS_TAG_RE = re.compile(r"_eps-([A-Za-z0-9_]+)=(-?\d+(?:\.\d+)?)")
@@ -183,7 +187,15 @@ def _validate(case, case_dir):
         if entry is None or not {"altitude_m", "airspeed_m_s", "thrust_n"} <= set(entry):
             raise ValueError(f"operating.{pt} needs altitude_m, airspeed_m_s, thrust_n")
 
-    parse_objectives(case["objectives"])          # raises on a malformed spec / bad proxy count
+    specs = parse_objectives(case["objectives"])   # raises on a malformed spec / bad proxy count
+    if any(s.name == "electrical_power" for s in specs if s.role != "reserved"):
+        m = case.get("motor")
+        if not isinstance(m, dict) or m.get("model") not in ("placebo", "mcdonald", "three_constant"):
+            raise ValueError(
+                "objective 'electrical_power' needs case['motor'] = "
+                "{'model': 'placebo'|'mcdonald'|'three_constant', ...}")
+        if m["model"] == "placebo" and not (0.0 < float(m.get("efficiency", 0.0)) <= 1.0):
+            raise ValueError("motor 'placebo' needs efficiency in (0, 1]")
 
     af = case["airfoil"]
     tbl = af.get("table_dir")

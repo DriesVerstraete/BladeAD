@@ -4,18 +4,22 @@ import scipy.sparse
 from BladeAD.utils.parameterization_custom_op import BSplineParameterizationExplicitOperation
 
 
-def get_bspline_mtx(num_cp, num_pt, order=4):
+def get_bspline_mtx(num_cp, num_pt, order=4, sample_locations=None):
     order = min(order, num_cp)
 
     knots = np.zeros(num_cp + order)
     knots[order-1:num_cp+1] = np.linspace(0, 1, num_cp - order + 2)
     knots[num_cp+1:] = 1.0
 
-    u = np.zeros(num_pt)
-    for i in range(num_pt):
-        u[i] = 1 - np.cos(np.pi/(2 * num_pt) * i)
-
-    t_vec = np.linspace(0, 1, num_pt)
+    if sample_locations is None:
+        t_vec = np.linspace(0, 1, num_pt)
+    else:
+        t_vec = np.asarray(sample_locations, dtype=float).reshape(-1)
+        if t_vec.shape[0] != num_pt:
+            raise ValueError(
+                f"sample_locations has length {t_vec.shape[0]}, expected num_pt={num_pt}"
+            )
+        t_vec = np.clip(t_vec, 0.0, 1.0)
 
     basis = np.zeros(order)
     arange = np.arange(order)
@@ -88,6 +92,12 @@ class BsplineParameterization:
         Number of B-spline control points.
     order : int, optional
         Order of B-spline, by default 4.
+    sample_locations : np.ndarray, optional
+        Parameter values in [0, 1] at which to sample the B-spline, length
+        ``num_radial``. Default None -> uniform ``np.linspace(0, 1, num_radial)``
+        (unchanged legacy behaviour). Pass the normalized physical radial
+        station locations here when using a non-uniform BEM grid so control
+        points map to fixed span fractions regardless of station spacing.
 
     Raises
     ------
@@ -101,6 +111,7 @@ class BsplineParameterization:
             num_radial,
             num_cp,
             order: int=4,
+            sample_locations=None,
         ) -> None:
         csdl.check_parameter(num_cp, "num_radial", types=int)
         csdl.check_parameter(num_cp, "num_cp", types=int)
@@ -115,7 +126,7 @@ class BsplineParameterization:
         self.num_cp = num_cp
         self.order = order
         self.num_radial = num_radial
-        self.b_spline_mat = get_bspline_mtx(num_cp, num_radial, order)
+        self.b_spline_mat = get_bspline_mtx(num_cp, num_radial, order, sample_locations)
 
     def evaluate_radial_profile(self, control_points : csdl.Variable):
         """Evaluate radial profile using B-spline parameterization.

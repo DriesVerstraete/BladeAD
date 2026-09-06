@@ -34,6 +34,7 @@ def preprocess_input_variables(
     origin_velocity: csdl.Variable,
     atmos_states,
     num_blades: int,
+    norm_radial_stations=None,
     theta_0=0,
     theta_1_c=0,
     theta_1_s=0,
@@ -92,23 +93,53 @@ def preprocess_input_variables(
         a_exp = csdl.expand(a, shape, action="i->ijk")
        
  
-    # compute blade element width
+    # compute normalized radius and blade element width(s)
     r_hub = norm_hub_radius * radius
-    dr = (radius - r_hub) / (num_radial - 1)
- 
-    # compute normalized radius ]0, 1[
-    # (the values correspond to the center of a blade element)
-    norm_radius_linspace = 1.0 / num_radial / 2.0 + np.linspace(
-        0.0, 1.0 - 1.0 / num_radial, num_radial
-    )
-    norm_radius_exp = csdl.Variable(
-        value=np.einsum(
-            "ik,j->ijk",
-            np.ones((num_nodes, num_azimuthal)),
-            norm_radius_linspace,
+    if norm_radial_stations is None:
+        # uniform grid: nodes at element centres, scalar element width.
+        # Unchanged legacy behaviour.
+        dr = (radius - r_hub) / (num_radial - 1)
+        norm_radius_linspace = 1.0 / num_radial / 2.0 + np.linspace(
+            0.0, 1.0 - 1.0 / num_radial, num_radial
         )
-    )
- 
+        norm_radius_exp = csdl.Variable(
+            value=np.einsum(
+                "ik,j->ijk",
+                np.ones((num_nodes, num_azimuthal)),
+                norm_radius_linspace,
+            )
+        )
+    else:
+        # non-uniform grid: user-supplied normalized stations in (0, 1).
+        # Per-node element widths from edge midpoints (outer edges pinned at
+        # hub and tip), so the widths sum to (radius - r_hub) exactly. The BEM
+        # integrates (integrand * dr) with a plain Riemann sum over these
+        # widths (edge-midpoint rule) -- see bem_model.py.
+        stations = np.asarray(norm_radial_stations, dtype=float).reshape(-1)
+        if stations.shape[0] != num_radial:
+            raise ValueError(
+                f"norm_radial_stations has length {stations.shape[0]}, "
+                f"expected num_radial={num_radial}"
+            )
+        if stations[0] <= 0.0 or stations[-1] >= 1.0 or np.any(np.diff(stations) <= 0.0):
+            raise ValueError(
+                "norm_radial_stations must be strictly increasing and lie in "
+                "the open interval (0, 1)"
+            )
+        edges = np.concatenate(([0.0], 0.5 * (stations[:-1] + stations[1:]), [1.0]))
+        dr_frac = np.diff(edges)  # fraction of (radius - r_hub) carried by each node
+        norm_radius_exp = csdl.Variable(
+            value=np.einsum(
+                "ik,j->ijk", np.ones((num_nodes, num_azimuthal)), stations
+            )
+        )
+        dr_frac_exp = csdl.Variable(
+            value=np.einsum(
+                "ik,j->ijk", np.ones((num_nodes, num_azimuthal)), dr_frac
+            )
+        )
+        dr = (radius - r_hub) * dr_frac_exp
+
     # compute the radius vector (hub to tip)
     radius_vec_exp = r_hub + (radius - r_hub) * norm_radius_exp
  

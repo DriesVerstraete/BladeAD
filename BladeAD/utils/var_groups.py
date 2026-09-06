@@ -31,6 +31,13 @@ class RotorMeshParameters(csdl.VariableGroup):
         Number of blades
     norm_hub_radius : float
         Normalmized hub radius (default=0.2)
+    norm_radial_stations : Union[np.ndarray, csdl.Variable], optional
+        Strictly-increasing normalized radial station locations in the open
+        interval (0, 1), length ``num_radial``. When given, the BEM uses this
+        non-uniform grid instead of the default uniform element-centre spacing
+        and integrates sectional loads with a plain Riemann sum over per-node
+        element widths (edge-midpoint rule). Default None -> uniform grid,
+        unchanged legacy behaviour.
     """
     thrust_vector : Union[np.ndarray, csdl.Variable]
     thrust_origin : Union[np.ndarray, csdl.Variable]
@@ -41,6 +48,7 @@ class RotorMeshParameters(csdl.VariableGroup):
     num_azimuthal: int
     num_blades: int
     norm_hub_radius: float = 0.2
+    norm_radial_stations: Union[np.ndarray, csdl.Variable] = None
     thickness_to_chord: csdl.Variable = None
     normalized_thickness_shape: csdl.Variable = None
     thickness_shape_chordwise_locations: csdl.Variable = None

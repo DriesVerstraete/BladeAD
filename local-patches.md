@@ -92,3 +92,39 @@ properties, raw stress fields, and smooth allowable utilizations.
 failure constraints without breaking the AD graph. The first model is deliberately a static
 equivalent-isotropic fidelity level; its documented exclusions prevent it being mistaken for a
 composite laminate or aeroelastic analysis.
+
+## 2026-09-06 — Non-uniform (custom) radial-station grid for the BEM
+
+**Branch:** `nonuniform-radial-grid` → merged to `neuralfoil-csdl-pass1` (both local-only; not
+yet pushed to `origin`).
+
+**Files:** `BladeAD/utils/var_groups.py`, `BladeAD/core/preprocessing/preprocess_variables.py`,
+`BladeAD/core/BEM/bem_model.py`, `BladeAD/utils/parameterization.py`,
+`BladeAD/utils/integration_schemes.py`.
+
+**What:** `RotorMeshParameters` gained an optional `norm_radial_stations` field — a
+strictly-increasing array of normalized station locations in the open interval (0, 1), length
+`num_radial`. When supplied, `preprocess_input_variables` builds `norm_radius_exp` from it and a
+**per-node element-width vector** from edge midpoints (outer edges pinned at hub and tip, so the
+widths sum to `radius - r_hub` exactly), and `BEMModel.evaluate` routes
+`compute_quantities_of_interest` through a plain **Riemann** sum (edge-midpoint rule) instead of
+the uniform-spacing trapezoidal/Simpson weights. `BsplineParameterization` /
+`get_bspline_mtx` gained an optional `sample_locations` arg so chord/twist control points can be
+sampled at the true normalized station positions (fixed span fractions regardless of spacing).
+Also fixed a pre-existing typo in `integration_schemes.py`'s 3-D Riemann branch
+(`valu=` → `value=`, previously unreachable).
+
+**All new behaviour is gated behind `norm_radial_stations=None` / `sample_locations=None` =
+byte-identical legacy behaviour.** Verified: `pytest tests/` 86/86 pass; a hover-only Shahjahan
+optimisation run on the `None` path is bit-identical (max abs diff 0.0) to the pre-patch code.
+
+**Why:** BladeAD's BEM otherwise offers only `num_radial` (a count) with hard-coded uniform
+`np.linspace` spacing and a scalar element width — no way to use a cosine (Chebyshev) aero grid.
+The Shahjahan CSDL optimiser's grid-convergence study
+(`06-rotor-optimisation/shahjahan-rotor/findings/findings-aero-structural-grid-decoupling.md`)
+settled on cosine-48 (≈ uniform-96 on dT/dr shape convergence, at half the stations). Full
+context: `06-rotor-optimisation/decisions/2026-09-06-shahjahan-proprotor-csdl-optimizer.md`
+§ "Step 2".
+
+**Consequence if not patched:** the CSDL/BladeAD rotor optimiser is stuck with a uniform grid
+and must run ~n=96 for converged tip-region loading where a cosine n≈48 would do.

@@ -65,7 +65,7 @@ def integrate_quantity(quantity: csdl.Variable, scheme='trapezoidal'):
             elif scheme == 'Riemann':
                 integrated_quantity = csdl.sum(quantity[i, :, :])
                 qt_container = qt_container.set(
-                    csdl.slice[i], valu=integrated_quantity / num_azimuthal
+                    csdl.slice[i], value=integrated_quantity / num_azimuthal
                 )
             
             else:

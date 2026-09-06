@@ -70,6 +70,9 @@ class BEMModel:
         num_azimuthal = inputs.mesh_parameters.num_azimuthal
         num_blades = inputs.mesh_parameters.num_blades
         norm_hub_radius = inputs.mesh_parameters.norm_hub_radius
+        norm_radial_stations = getattr(inputs.mesh_parameters, "norm_radial_stations", None)
+        if isinstance(norm_radial_stations, list):
+            norm_radial_stations = norm_radial_stations[0]
 
         if isinstance(num_azimuthal, list):
             num_azimuthal = num_azimuthal[0]
@@ -134,7 +137,15 @@ class BEMModel:
             origin_velocity=mesh_velocity,
             rpm=rpm,
             num_blades=num_blades,
+            norm_radial_stations=norm_radial_stations,
             atmos_states=inputs.atmos_states,
+        )
+
+        # A non-uniform radial grid carries per-node element widths in `dr`;
+        # sectional loads must then be summed with a plain Riemann rule
+        # (edge-midpoint), not the uniform-spacing trapezoidal/Simpson weights.
+        qoi_integration_scheme = (
+            "Riemann" if norm_radial_stations is not None else self.integration_scheme
         )
 
         # Compute the rotor frame velocities from "mesh" velocities
@@ -186,7 +197,7 @@ class BEMModel:
             Cd=bem_implicit_outputs.Cd,
             dr=pre_process_outputs.element_width,
             num_blades=num_blades,
-            integration_scheme=self.integration_scheme,
+            integration_scheme=qoi_integration_scheme,
             airfoil_model=self.airfoil_model,
         )
 

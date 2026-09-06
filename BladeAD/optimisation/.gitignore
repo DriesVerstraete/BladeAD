@@ -1,0 +1,10 @@
+# Run artifacts stay on the machine that produced them (single-machine resume).
+# Only case.py configs and the workflow code are tracked.
+cases/**/stage1_*.pkl
+cases/**/pareto_front_*.pkl
+cases/**/_anchor_registry.json
+cases/**/rotor_pareto_solve_outputs/
+cases/**/*.log
+cases/**/*.png
+cases/**/*_outputs/
+cases/**/hover_seed*.pkl

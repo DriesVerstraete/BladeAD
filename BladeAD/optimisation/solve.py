@@ -26,6 +26,8 @@ is the subprocess entry the sweep layer calls; `run(case, out_dir, seed_dict,
 
 Run in the `rotor_design` conda env (BladeAD fork `neuralfoil-csdl-pass1`).
 """
+import csv
+import functools
 import os
 import pickle
 from dataclasses import dataclass
@@ -158,6 +160,44 @@ def _airfoil_model(case, clamp_reynolds):
         sections=af["section_boundaries_r_over_r"], airfoil_models=models, smoothing=False)
 
 
+@functools.lru_cache(maxsize=64)
+def _airfoil_table_clmax(table_path, ref_reynolds):
+    """Pre-stall Cl_max (max CL over alpha in [-5, 20] deg) of one NeuralFoil
+    polar table, at the nearest tabulated Reynolds node to `ref_reynolds`,
+    floored at 2e5 (below that the thick MH root section hits a
+    laminar-separation Cl_max cliff that is not a real rotor design limit)."""
+    re_all, al_all, cl_all = [], [], []
+    with open(table_path, newline="") as f:
+        for row in csv.DictReader(f):
+            re_all.append(float(row["reynolds"]))
+            al_all.append(float(row["alpha"]))
+            cl_all.append(float(row["CL"]))
+    re_all, al_all, cl_all = np.array(re_all), np.array(al_all), np.array(cl_all)
+    nodes = np.unique(re_all)
+    target = float(np.clip(ref_reynolds, max(2e5, nodes.min()), nodes.max()))
+    node = nodes[np.argmin(np.abs(nodes - target))]
+    m = (re_all == node) & (al_all >= -5.0) & (al_all <= 20.0)
+    return float(cl_all[m].max())
+
+
+def _section_clmax_profile(case, r_over_R):
+    """Per-radial-station raw section Cl_max (NOT margin-reduced). Each airfoil's
+    Cl_max is read at its `airfoil.clmax_ref_reynolds` (a list, one per airfoil;
+    default 7e5 each). How those reference Reynolds numbers were chosen -- and
+    when to revisit them for a different rotor/mission -- is in the rotor-
+    optimisation project's decisions/2026-09-07-section-clmax-stall-constraint.md."""
+    af = case["airfoil"]
+    bounds = np.asarray(af["section_boundaries_r_over_r"], dtype=float)
+    names = af["names"]
+    ref_re = af.get("clmax_ref_reynolds", [7e5] * len(names))
+    per_airfoil = [
+        _airfoil_table_clmax(os.path.join(af["table_dir"], f"{n}_neuralfoil_table.csv"), float(re))
+        for n, re in zip(names, ref_re)]
+    r = np.asarray(r_over_R, dtype=float)
+    idx = np.clip(np.searchsorted(bounds, r, side="right") - 1, 0, len(names) - 1)
+    return np.array([per_airfoil[i] for i in idx])
+
+
 def _bem_point(chord_profile, twist_profile, rpm_var, spec, op, airfoil_model,
                norm_stations=None, num_azimuthal=1, extra_mesh_fields=None):
     """One BEM design point -> (RotorAnalysisInputs, BEMOutputs). twist_profile
@@ -201,7 +241,8 @@ def run_case_dir(case_dir, **opts):
     if isinstance(seed, str):                       # "inverse-design"
         if not opts.get("initial_result_from") and not opts.get("pin_geometry_from"):
             from . import seed as seedmod
-            opts["initial_result_from"] = seedmod.write_inverse_design_seed(ctx, "hover")
+            kind = "fpp" if ctx.case["rotor"].get("fixed_pitch") else "hover"
+            opts["initial_result_from"] = seedmod.write_inverse_design_seed(ctx, kind)
         seed_dict = None
     else:
         seed_dict = seed
@@ -272,6 +313,11 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
     cruise = _op(case["operating"]["cruise"])
     bounds = case["bounds"]
 
+    # fixed-pitch proprotor (Shahjahan FPP): one shared rigid collective for
+    # hover, cruise and OEI -- only the per-condition rpm varies. Default off
+    # (VPP: independent hover_pitch + cruise_pitch, as before).
+    fixed_pitch = bool(case["rotor"].get("fixed_pitch", False))
+
     # --- resolve the starting DVs ---
     if pin_geometry_from is not None or initial_result_from is not None:
         src = pin_geometry_from if pin_geometry_from is not None else initial_result_from
@@ -281,7 +327,9 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         twist_cp0 = np.asarray(prev["twist_cps"], dtype=float)
         hover_rpm0 = float(prev["rpm"])
         cruise_rpm0 = float(prev.get("cruise_rpm", 0.5 * sum(bounds["cruise_rpm"])))
-        hover_pitch0 = np.deg2rad(float(prev.get("hover_pitch_deg", 0.0)))
+        _hp_seed = prev.get("pitch_deg", prev.get("hover_pitch_deg", 0.0)) if fixed_pitch \
+            else prev.get("hover_pitch_deg", 0.0)
+        hover_pitch0 = np.deg2rad(float(_hp_seed))
         cruise_pitch0 = np.deg2rad(float(prev.get("cruise_pitch_deg", 0.0)))
         oei_rpm0 = float(prev.get("oei_rpm") or hover_rpm0)
     else:
@@ -292,7 +340,9 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         twist_cp0 = np.deg2rad(np.array(seed_dict["twist_cps_deg"], dtype=float))
         hover_rpm0 = seed_dict["hover_rpm"]
         cruise_rpm0 = seed_dict["cruise_rpm"]
-        hover_pitch0 = np.deg2rad(seed_dict["hover_pitch_deg"])
+        _hp_seed = seed_dict.get("pitch_deg", seed_dict["hover_pitch_deg"]) if fixed_pitch \
+            else seed_dict["hover_pitch_deg"]
+        hover_pitch0 = np.deg2rad(_hp_seed)
         cruise_pitch0 = np.deg2rad(seed_dict["cruise_pitch_deg"])
         oei_rpm0 = seed_dict.get("oei_rpm", seed_dict["hover_rpm"])
 
@@ -317,18 +367,21 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
     hover_rpm = csdl.Variable(value=np.array([hover_rpm0]))
     cruise_rpm = csdl.Variable(value=np.array([cruise_rpm0]))
     hover_pitch = csdl.Variable(value=np.array([hover_pitch0]))
-    cruise_pitch = csdl.Variable(value=np.array([cruise_pitch0]))
+    # FPP: cruise (and OEI) reuse the same collective variable as hover.
+    cruise_pitch = hover_pitch if fixed_pitch else csdl.Variable(value=np.array([cruise_pitch0]))
+    _pitch_b = bounds["pitch_deg"] if fixed_pitch else bounds["hover_pitch_deg"]
 
     if not pinned:
         chord_cps.set_as_design_variable(lower=bounds["chord_m"][0], upper=bounds["chord_m"][1], scaler=5.0)
         twist_cps.set_as_design_variable(lower=np.deg2rad(bounds["twist_deg"][0]),
                                          upper=np.deg2rad(bounds["twist_deg"][1]), scaler=2.0)
         hover_rpm.set_as_design_variable(lower=bounds["hover_rpm"][0], upper=bounds["hover_rpm"][1], scaler=1e-3)
-        hover_pitch.set_as_design_variable(lower=np.deg2rad(bounds["hover_pitch_deg"][0]),
-                                           upper=np.deg2rad(bounds["hover_pitch_deg"][1]), scaler=2.0)
+        hover_pitch.set_as_design_variable(lower=np.deg2rad(_pitch_b[0]),
+                                           upper=np.deg2rad(_pitch_b[1]), scaler=2.0)
     cruise_rpm.set_as_design_variable(lower=bounds["cruise_rpm"][0], upper=bounds["cruise_rpm"][1], scaler=1e-3)
-    cruise_pitch.set_as_design_variable(lower=np.deg2rad(bounds["cruise_pitch_deg"][0]),
-                                        upper=np.deg2rad(bounds["cruise_pitch_deg"][1]), scaler=2.0)
+    if not fixed_pitch:
+        cruise_pitch.set_as_design_variable(lower=np.deg2rad(bounds["cruise_pitch_deg"][0]),
+                                            upper=np.deg2rad(bounds["cruise_pitch_deg"][1]), scaler=2.0)
 
     if oei_active:
         _oei_rpm_b = bounds.get("oei_rpm", bounds["hover_rpm"])
@@ -379,16 +432,42 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
 
     taper = chord_profile[-1] / chord_profile[0]
     twist_washout = twist_profile[0] - twist_profile[-1]
-    hover_max_cl = csdl.maximum(hover_out.sectional_lift_coefficient)
+    hover_max_cl = csdl.maximum(hover_out.sectional_lift_coefficient)     # raw, for reporting
     cruise_max_cl = csdl.maximum(cruise_out.sectional_lift_coefficient)
+
+    # Stall constraint: either a flat `constraints.cl_max` cap on the peak
+    # sectional Cl (legacy, still the default), or -- when `constraints.stall_margin`
+    # is set -- a radius-dependent one: max_i(cl_i / section_Cl_max_i) <= stall_margin,
+    # with section Cl_max from each airfoil's polar table (`_section_clmax_profile`).
+    _stall_margin = constraints.get("stall_margin")
+    if _stall_margin is None:
+        hover_cl_con, cruise_cl_con = hover_max_cl, cruise_max_cl
+        _cl_upper = float(constraints["cl_max"])
+        _clmax_profile = None
+    else:
+        _clmax_profile = _section_clmax_profile(case, r_over_R)
+
+        def _stall_ratio(bem_out):
+            cl = bem_out.sectional_lift_coefficient
+            n = int(np.asarray(cl.value).size)
+            k = n // num_radial
+            prof = (np.repeat(_clmax_profile, k) if k >= 1 and k * num_radial == n
+                    else np.full(n, float(_clmax_profile.min())))
+            # cl is (num_nodes, num_radial, num_azimuthal); np.repeat's C-order
+            # layout is already row-major (num_radial, num_azimuthal), so a plain
+            # reshape to cl.shape lines the section Cl_max up per station.
+            return csdl.maximum(cl / csdl.Variable(value=prof.reshape(cl.shape)))
+
+        hover_cl_con, cruise_cl_con = _stall_ratio(hover_out), _stall_ratio(cruise_out)
+        _cl_upper = float(_stall_margin)
 
     if not pinned:
         hover_out.total_thrust.set_as_constraint(equals=hover.thrust, scaler=1e-3)
         taper.set_as_constraint(lower=constraints["taper"][0], upper=constraints["taper"][1], scaler=1.0)
         twist_washout.set_as_constraint(lower=0.0, scaler=1.0)
-        hover_max_cl.set_as_constraint(upper=constraints["cl_max"], scaler=1.0)
+        hover_cl_con.set_as_constraint(upper=_cl_upper, scaler=1.0)
     cruise_out.total_thrust.set_as_constraint(equals=cruise.thrust, scaler=1e-3)
-    cruise_max_cl.set_as_constraint(upper=constraints["cl_max"], scaler=1.0)
+    cruise_cl_con.set_as_constraint(upper=_cl_upper, scaler=1.0)
 
     # --- motor: shaft torque/speed -> electrical input power ---
     # step 1a is a PLACEBO (fixed efficiency); step 1b is the real McDonald
@@ -422,8 +501,9 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         oei_torque_margin = oei_motor.torque_margin
         oei_thrust = oei_out.total_thrust
         oei_thrust_margin = oei_thrust / hover.thrust        # denominator = hover thrust target
-        oei_max_cl = csdl.maximum(oei_out.sectional_lift_coefficient)
-        oei_max_cl.set_as_constraint(upper=constraints["cl_max"], scaler=1.0)
+        oei_max_cl = csdl.maximum(oei_out.sectional_lift_coefficient)     # raw, for reporting
+        oei_cl_con = oei_max_cl if _stall_margin is None else _stall_ratio(oei_out)
+        oei_cl_con.set_as_constraint(upper=_cl_upper, scaler=1.0)
         if oei_torque_margin is not None:
             oei_torque_margin.set_as_constraint(upper=1.0, scaler=1.0)
         _min_oei_margin = constraints.get("min_oei_thrust_margin")
@@ -524,14 +604,14 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         "cruise thrust matches target": abs(cruise_out.total_thrust.value[0] - cruise.thrust) < tol,
         "taper in bounds": constraints["taper"][0] - 1e-3 <= taper.value[0] <= constraints["taper"][1] + 1e-3,
         "twist washout >= 0": twist_washout.value[0] >= -1e-4,
-        "hover max_cl <= limit": hover_max_cl.value[0] <= constraints["cl_max"] + 1e-3,
-        "cruise max_cl <= limit": cruise_max_cl.value[0] <= constraints["cl_max"] + 1e-3,
+        "hover max_cl <= limit": float(hover_cl_con.value[0]) <= _cl_upper + 1e-3,
+        "cruise max_cl <= limit": float(cruise_cl_con.value[0]) <= _cl_upper + 1e-3,
     }
     if hover_torque_margin is not None:
         checks["hover motor torque within envelope"] = float(hover_torque_margin.value[0]) <= 1.0 + 1e-3
         checks["cruise motor torque within envelope"] = float(cruise_torque_margin.value[0]) <= 1.0 + 1e-3
     if oei_thrust_margin is not None:
-        checks["oei max_cl <= limit"] = float(oei_max_cl.value[0]) <= constraints["cl_max"] + 1e-3
+        checks["oei max_cl <= limit"] = float(oei_cl_con.value[0]) <= _cl_upper + 1e-3
         if oei_torque_margin is not None:
             checks["oei motor torque within envelope"] = float(oei_torque_margin.value[0]) <= 1.0 + 1e-3
         _mom = constraints.get("min_oei_thrust_margin")
@@ -602,6 +682,7 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         "cruise_rpm": float(cruise_rpm.value[0]),
         "hover_pitch_deg": float(np.rad2deg(hover_pitch.value[0])),
         "cruise_pitch_deg": float(np.rad2deg(cruise_pitch.value[0])),
+        "fixed_pitch": fixed_pitch,
         "hover_thrust": float(hover_out.total_thrust.value[0]),
         "cruise_thrust": float(cruise_out.total_thrust.value[0]),
         "figure_of_merit": fm,
@@ -636,6 +717,10 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         "twist_washout_deg": float(np.rad2deg(twist_washout.value[0])),
         "hover_max_sectional_cl": float(hover_max_cl.value[0]),
         "cruise_max_sectional_cl": float(cruise_max_cl.value[0]),
+        "stall_margin": (float(_stall_margin) if _stall_margin is not None else None),
+        "section_clmax_profile": (list(map(float, _clmax_profile)) if _clmax_profile is not None else None),
+        "hover_stall_ratio": float(hover_cl_con.value[0]),
+        "cruise_stall_ratio": float(cruise_cl_con.value[0]),
         "acoustics_active": acoustics_active,
         "hover_noise_max": hover_noise_max,
         "acoustics": acoustics,

@@ -182,6 +182,11 @@ def _validate(case, case_dir):
     if rd not in ("cosine", "uniform"):
         raise ValueError(f"rotor.radial_distribution must be 'cosine' or 'uniform', got {rd!r}")
 
+    if case["rotor"].get("fixed_pitch"):
+        b = case["bounds"].get("pitch_deg")
+        if not (isinstance(b, (list, tuple)) and len(b) == 2 and b[0] < b[1]):
+            raise ValueError("rotor.fixed_pitch needs bounds.'pitch_deg' as a (lo, hi) pair")
+
     for pt in ("hover", "cruise"):
         entry = case["operating"].get(pt)
         if entry is None or not {"altitude_m", "airspeed_m_s", "thrust_n"} <= set(entry):
@@ -225,6 +230,14 @@ def _validate(case, case_dir):
         raise ValueError("airfoil.section_boundaries_r_over_r must have one more entry than names")
     if len(af["t_over_c"]) != len(af["names"]):
         raise ValueError("airfoil.t_over_c must match airfoil.names in length")
+    if "clmax_ref_reynolds" in af and len(af["clmax_ref_reynolds"]) != len(af["names"]):
+        raise ValueError("airfoil.clmax_ref_reynolds must have one entry per airfoil name")
+
+    sm = case["constraints"].get("stall_margin")
+    if sm is not None and not (isinstance(sm, (int, float)) and 0.0 < sm <= 1.0):
+        raise ValueError("constraints.stall_margin must be in (0, 1]")
+    if sm is None and "cl_max" not in case["constraints"]:
+        raise ValueError("constraints needs 'cl_max' (flat cap) or 'stall_margin' (section-based)")
 
     seed = case["seed"]
     if isinstance(seed, str):

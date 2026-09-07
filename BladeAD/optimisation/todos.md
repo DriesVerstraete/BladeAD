@@ -6,6 +6,13 @@ in the SPL rotor-optimisation project `roadmap.md`, not here.
 
 ## Open
 
+- **Section Cl_max, live-Re v2** -- `solve._section_clmax_profile` uses a fixed
+  reference Reynolds per airfoil (`airfoil.clmax_ref_reynolds`). A v2 would
+  interpolate Cl_max(Re) against the live per-station Re instead. Only worth it
+  if a case shows the fixed reference is materially wrong. Derivation of the
+  current values + when to revisit them: decision
+  `06-rotor-optimisation/decisions/2026-09-07-section-clmax-stall-constraint.md`.
+
 - **`grid._node` first-stair retry has no cap.** When a column's uncapped natural
   value is far from any feasible cap (e.g. the max-FM blade: natural noise ~80.6,
   no feasible cap at all), the retry loop grinds through every `n_stair` cap at

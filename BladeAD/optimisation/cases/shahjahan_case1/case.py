@@ -63,13 +63,25 @@ CASE = {
         "cl_max": 0.8,
         "taper": (0.15, 0.9),
         "thrust_tolerance_n": 1.0,
-        # "min_oei_thrust_margin": 1.143,   # optional hard OEI floor (N/(N-1)); off for now
+        # OEI survivability: one motor out, N-1 rotors carry the aircraft -> each
+        # must make N/(N-1) = 8/7 = 1.143 of nominal per-rotor hover thrust. The
+        # explore sweep showed margin is near-binary (~0.76 min-hover-power corner
+        # vs ~1.9 everywhere else) and Shahjahan reports 1.3-1.7, so this floor
+        # cuts only the non-survivable corner and costs ~nothing.
+        "min_oei_thrust_margin": 1.143,
     },
     "airfoil": {
         "section_boundaries_r_over_r": [0.0, 0.22, 0.55, 0.85, 1.0],
         "names": ["MH126", "MH113", "MH115", "MH121"],
         "t_over_c": [0.250, 0.147, 0.111, 0.088],
         "table_dir": _TABLE_DIR,
+        # Reference Reynolds per airfoil for the section-Cl_max stall constraint
+        # (only used when constraints.stall_margin is set). Chosen from the
+        # sectional-Re range across converged VPP + FPP blades (2026-09-07):
+        # root ~0.5 M, mid-blade ~1 M, tip drops to ~0.4 M in VPP cruise and
+        # MH121 is the most Re-sensitive airfoil, so the tip gets a conservative
+        # 3e5. Derivation + revisit criteria: decisions/2026-09-07-section-clmax-stall-constraint.md.
+        "clmax_ref_reynolds": [5.0e5, 1.0e6, 1.0e6, 3.0e5],   # MH126 / MH113 / MH115 / MH121
     },
     "acoustic": {
         "n_rotors": 8,

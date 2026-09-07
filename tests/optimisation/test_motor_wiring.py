@@ -118,6 +118,22 @@ def test_validate_case1_oei_slot_and_guards():
         casemod._validate(dict(bad2), os.path.join(CASES, "shahjahan_case1"))
 
 
+def test_fixed_pitch_case_load_and_guards():
+    import BladeAD.optimisation.case as casemod
+    fpp = casemod.load_case_dict(os.path.join(CASES, "shahjahan_case1_fpp"))
+    assert fpp["rotor"]["fixed_pitch"] is True
+    assert fpp["bounds"]["pitch_deg"] == (0.0, 60.0)
+    assert fpp["constraints"]["min_oei_thrust_margin"] == 1.143   # inherited from shahjahan_case1
+
+    vpp = casemod.load_case_dict(os.path.join(CASES, "shahjahan_case1"))
+    assert not vpp["rotor"].get("fixed_pitch")                    # override didn't leak into the base
+
+    bad = casemod.load_case_dict(os.path.join(CASES, "shahjahan_case1_fpp"))
+    bad["bounds"] = {k: v for k, v in bad["bounds"].items() if k != "pitch_deg"}
+    with pytest.raises(ValueError):
+        casemod._validate(dict(bad), os.path.join(CASES, "shahjahan_case1_fpp"))
+
+
 def test_validate_accepts_mcdonald_case_and_rejects_bad_overload():
     from BladeAD.optimisation.case import load_case_dict
     case = load_case_dict(os.path.join(CASES, "shahjahan_test_motor_mcdonald"))

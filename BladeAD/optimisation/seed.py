@@ -221,6 +221,38 @@ def design_seed_blade(kind, *, cl_start=0.6, cl_max=0.8, cl_step=0.05,
                     "what the disk supports at a physical section Cl"}
 
 
+def fpp_blend_blade(*, hover_kw, cruise_kw, hover_weight=0.4,
+                    taper_bounds=(0.15, 0.9)):
+    """Fixed-pitch (FPP) seed -- one blade that must hover AND cruise.
+
+    Chord comes from the hover-ideal blade (it has to carry the hover
+    solidity; the cruise-MIL blade is razor-thin and cannot make hover
+    thrust). Twist keeps the hover-ideal *mean* pitch (so hover sections stay
+    near cl_design, not stalled) and blends in the cruise-MIL blade's extra
+    *washout* -- `1 - hover_weight` of the way -- so the built-in root-tip
+    gradient lets the tip approach cruise pitch while the root hovers
+    (Shahjahan's "large blade pitch change per unit span"). The shared
+    collective DV then trims the mean for the compromise. Not an optimum, a
+    non-diverging start off the hover-biased local corner a pure hover seed
+    lands in.
+
+    Returns the hover-ideal blade dict with `twist_rad` replaced by the blend,
+    plus `feasible` (both single-point blades feasible), `taper`, `_blend`.
+    """
+    h = design_seed_blade("hover", **hover_kw)
+    c = design_seed_blade("cruise", **cruise_kw)
+    w = float(np.clip(hover_weight, 0.0, 1.0))
+    tw_h = h["twist_rad"]
+    tw_c = np.interp(h["r_m"], c["r_m"], c["twist_rad"])
+    twist = w * tw_h + (1.0 - w) * tw_c   # blade angle blend; cl overshoot in hover is
+                                          # expected and the optimiser trims it (FPP penalty)
+    chord = _enforce_taper(h["chord_m"], taper_bounds)
+    return {**h, "chord_m": chord, "twist_rad": twist,
+            "cl_used": h["cl_used"], "feasible": bool(h["feasible"] and c["feasible"]),
+            "taper": float(chord[-1] / chord[0]),
+            "_blend": {"hover_weight": w, "hover_cl": h["cl_used"], "cruise_cl": c["cl_used"]}}
+
+
 # ---------------------------------------------------------------------------
 # Case glue: every quantity read from the case dict, nothing re-typed
 # ---------------------------------------------------------------------------
@@ -236,8 +268,11 @@ def seed_inputs_from_case(case):
            "radius_m": case["rotor"]["radius_m"],
            "hub_radius_m": case["rotor"]["hub_radius_m"]}
     c = case["constraints"]
+    # the seed's Cl ramp cap: the flat cl_max if set, else a mid-section-airfoil
+    # ballpark for the section-Cl_max mode (the seed is only a starting blade).
+    cl_ramp_cap = c.get("cl_max", 1.2)
     common = dict(rot, n_stations=SEED_N_STATIONS, cl_start=CL_RAMP_START,
-                  cl_step=CL_RAMP_STEP, cl_max=c["cl_max"], taper_bounds=tuple(c["taper"]))
+                  cl_step=CL_RAMP_STEP, cl_max=cl_ramp_cap, taper_bounds=tuple(c["taper"]))
 
     seed = case["seed"]
     if isinstance(seed, dict):
@@ -269,31 +304,43 @@ def preflight_feasibility(case):
 
 def write_inverse_design_seed(ctx, kind):
     """Write an `initial_result_from`-format pkl from the deterministic
-    inverse-design blade for `kind` ('hover'|'cruise') into the case dir; return
-    its path. Cached by filename."""
+    inverse-design blade for `kind` ('hover' | 'cruise' | 'fpp') into the case
+    dir; return its path. Cached by filename. 'fpp' is the fixed-pitch blend
+    (`fpp_blend_blade`); the shared collective is 0 (the blade angle is the full
+    angle) and both rpm guesses come from the bound midpoints, not the extremes."""
     out = ctx.out(f"seed_inverse_design_{kind}.pkl")
     if os.path.exists(out):
         return out
     case = ctx.case
     inp = seed_inputs_from_case(case)
-    blade = design_seed_blade(kind, **inp[kind])
+    if kind == "fpp":
+        blade = fpp_blend_blade(
+            hover_kw=inp["hover"], cruise_kw=inp["cruise"],
+            hover_weight=case["rotor"].get("fpp_seed_hover_weight", 0.4),
+            taper_bounds=tuple(case["constraints"]["taper"]))
+    else:
+        blade = design_seed_blade(kind, **inp[kind])
     r_over_R = blade["r_m"] / case["rotor"]["radius_m"]
     hub_frac = case["rotor"]["hub_radius_m"] / case["rotor"]["radius_m"]
     norm = (r_over_R - hub_frac) / (1.0 - hub_frac)
     n_cp = case["rotor"]["n_chord_cps"]
     order = case["rotor"]["bspline_order"]
     hover_rpm_guess = (case["seed"]["hover_rpm"] if isinstance(case["seed"], dict)
-                       else float(case["bounds"]["hover_rpm"][1]))
+                       else 0.5 * sum(case["bounds"]["hover_rpm"]))
     cruise_rpm_guess = (case["seed"]["cruise_rpm"] if isinstance(case["seed"], dict)
                         else 0.5 * sum(case["bounds"]["cruise_rpm"]))
     seed = {
         "chord_cps": fit_bspline_cps(blade["chord_m"], norm, n_cp, order),
         "twist_cps": fit_bspline_cps(blade["twist_rad"], norm, n_cp, order),   # radians
-        # a cruise-shaped blade held to the hover thrust equality needs all the RPM it can get
-        "rpm": float(case["bounds"]["hover_rpm"][1]) if kind == "cruise" else float(hover_rpm_guess),
+        # a cruise-shaped blade held to the hover thrust equality needs all the RPM it can get;
+        # the fpp blend already carries hover solidity so it uses the midpoint guess.
+        "rpm": (float(case["bounds"]["hover_rpm"][1]) if kind == "cruise"
+                else float(hover_rpm_guess)),
         "cruise_rpm": float(cruise_rpm_guess),
-        "hover_pitch_deg": 0.0,     # MIL / ideal twist is already the full blade angle
+        "oei_rpm": float(hover_rpm_guess),
+        "hover_pitch_deg": 0.0,     # MIL / ideal / blend twist is already the full blade angle
         "cruise_pitch_deg": 0.0,
+        "pitch_deg": 0.0,          # FPP shared collective (blend twist is the full angle)
         "_inverse_design_kind": kind, "_feasible": blade["feasible"],
     }
     with open(out, "wb") as f:

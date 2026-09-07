@@ -210,7 +210,9 @@ def run_case_dir(case_dir, **opts):
 
 # quantity name (result-dict dotted key or proxy_min_key) -> objective scaler
 _OBJ_SCALER = {"cruise_power": _CRUISE_P_SCALER,
-               "cruise_electrical_power": _CRUISE_P_SCALER}
+               "cruise_electrical_power": _CRUISE_P_SCALER,
+               "hover_power": _CRUISE_P_SCALER,
+               "hover_electrical_power": _CRUISE_P_SCALER}
 
 
 def _dotted(d, path):
@@ -281,6 +283,7 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         cruise_rpm0 = float(prev.get("cruise_rpm", 0.5 * sum(bounds["cruise_rpm"])))
         hover_pitch0 = np.deg2rad(float(prev.get("hover_pitch_deg", 0.0)))
         cruise_pitch0 = np.deg2rad(float(prev.get("cruise_pitch_deg", 0.0)))
+        oei_rpm0 = float(prev.get("oei_rpm") or hover_rpm0)
     else:
         if seed_dict is None:
             raise SystemExit("no seed: case['seed'] is 'inverse-design' but no "
@@ -291,8 +294,20 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         cruise_rpm0 = seed_dict["cruise_rpm"]
         hover_pitch0 = np.deg2rad(seed_dict["hover_pitch_deg"])
         cruise_pitch0 = np.deg2rad(seed_dict["cruise_pitch_deg"])
+        oei_rpm0 = seed_dict.get("oei_rpm", seed_dict["hover_rpm"])
 
     pinned = pin_geometry_from is not None
+    # OEI (one-engine-inoperative) hover thrust-margin slot -- Shahjahan 2024
+    # "emergency hover": one motor out, the remaining rotors must still hover.
+    # margin = T_available_at_OEI / T_hover_per_rotor (denominator = the hover
+    # thrust target). Emergency hover is a V=0 condition sharing nominal hover's
+    # collective (Shahjahan Table 2: collective is a single hover-vs-cruise
+    # offset), so `oei_rpm` is the ONLY OEI design variable -- the blade is the
+    # hover blade, spun up. Capped by the x1.7 motor torque envelope and cl_max;
+    # no thrust equality (thrust IS the objective).
+    oei_active = any(s.result_key == "oei_thrust_margin" for s in live)
+    oei_max_cl = None
+    oei_thrust = oei_torque = oei_torque_margin = oei_motor_eff = oei_thrust_margin = None
 
     recorder = csdl.Recorder(inline=True)
     recorder.start()
@@ -315,13 +330,21 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
     cruise_pitch.set_as_design_variable(lower=np.deg2rad(bounds["cruise_pitch_deg"][0]),
                                         upper=np.deg2rad(bounds["cruise_pitch_deg"][1]), scaler=2.0)
 
+    if oei_active:
+        _oei_rpm_b = bounds.get("oei_rpm", bounds["hover_rpm"])
+        oei_rpm = csdl.Variable(value=np.array([oei_rpm0]))
+        oei_rpm.set_as_design_variable(lower=_oei_rpm_b[0], upper=_oei_rpm_b[1], scaler=1e-3)
+
     param = BsplineParameterization(num_radial=spec.num_radial, num_cp=spec.n_chord_cps,
                                     order=spec.bspline_order,
                                     sample_locations=(None if norm_stations is None else _ns))
     chord_profile = param.evaluate_radial_profile(chord_cps)
     twist_profile = param.evaluate_radial_profile(twist_cps)
 
-    airfoil_model = _airfoil_model(case, clamp_reynolds=acoustics_active)
+    # an OEI thrust-maximising point probes the airfoil-table Re edge during the
+    # search (root sections can fall below the table's Re floor) -- clamp rather
+    # than crash (feedback_bem_surrogate_table_domain_margins).
+    airfoil_model = _airfoil_model(case, clamp_reynolds=(acoustics_active or oei_active))
     naz = NUM_AZIMUTHAL_ACOUSTIC if acoustics_active else 1
     if acoustics_active:
         tc_profile = thickness_to_chord_profile(
@@ -336,6 +359,14 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
     cruise_in, cruise_out = _bem_point(chord_profile, twist_profile + cruise_pitch, cruise_rpm, spec,
                                        cruise, airfoil_model, norm_stations=norm_stations,
                                        num_azimuthal=naz, extra_mesh_fields=cruise_extra)
+
+    oei_out = None
+    if oei_active:
+        # emergency hover = the hover blade (same collective) spun to oei_rpm
+        oei_op = OperatingPoint(altitude=hover.altitude, airspeed=hover.airspeed, thrust=hover.thrust)
+        _, oei_out = _bem_point(chord_profile, twist_profile + hover_pitch, oei_rpm, spec,
+                                oei_op, airfoil_model, norm_stations=norm_stations,
+                                num_azimuthal=1, extra_mesh_fields=None)
 
     acoustic_bundle = None
     if acoustics_active:
@@ -384,6 +415,21 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
     if cruise_torque_margin is not None:
         cruise_torque_margin.set_as_constraint(upper=1.0, scaler=1.0)
 
+    if oei_active:
+        oei_motor = evaluate_case_motor(motor_cfg, oei_rpm, oei_out.total_power,
+                                        overload=motor_cfg.get("k_oei", motor_cfg.get("k_hover", 1.7)))
+        oei_torque, oei_motor_eff = oei_motor.torque, oei_motor.efficiency
+        oei_torque_margin = oei_motor.torque_margin
+        oei_thrust = oei_out.total_thrust
+        oei_thrust_margin = oei_thrust / hover.thrust        # denominator = hover thrust target
+        oei_max_cl = csdl.maximum(oei_out.sectional_lift_coefficient)
+        oei_max_cl.set_as_constraint(upper=constraints["cl_max"], scaler=1.0)
+        if oei_torque_margin is not None:
+            oei_torque_margin.set_as_constraint(upper=1.0, scaler=1.0)
+        _min_oei_margin = constraints.get("min_oei_thrust_margin")
+        if _min_oei_margin is not None:
+            oei_thrust_margin.set_as_constraint(lower=float(_min_oei_margin), scaler=1.0)
+
     # the physical result quantities each objective slot can name
     result_vars = {
         "figure_of_merit": hover_out.figure_of_merit,
@@ -393,6 +439,8 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         "cruise_electrical_power": cruise_electrical_power,
         "hover_electrical_power": hover_electrical_power,
     }
+    if oei_thrust_margin is not None:
+        result_vars["oei_thrust_margin"] = oei_thrust_margin
     if acoustic_bundle is not None:
         result_vars["acoustics.hover_ospl_db"] = acoustic_bundle.hover_ospl
 
@@ -482,6 +530,13 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
     if hover_torque_margin is not None:
         checks["hover motor torque within envelope"] = float(hover_torque_margin.value[0]) <= 1.0 + 1e-3
         checks["cruise motor torque within envelope"] = float(cruise_torque_margin.value[0]) <= 1.0 + 1e-3
+    if oei_thrust_margin is not None:
+        checks["oei max_cl <= limit"] = float(oei_max_cl.value[0]) <= constraints["cl_max"] + 1e-3
+        if oei_torque_margin is not None:
+            checks["oei motor torque within envelope"] = float(oei_torque_margin.value[0]) <= 1.0 + 1e-3
+        _mom = constraints.get("min_oei_thrust_margin")
+        if _mom is not None:
+            checks["oei thrust margin >= floor"] = float(oei_thrust_margin.value[0]) >= float(_mom) - 1e-4
     acoustics = None
     if acoustic_bundle is not None:
         def _s(v):
@@ -512,6 +567,8 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         "hover_power": float(hover_out.total_power.value[0]),
         "cruise_electrical_power": float(cruise_electrical_power.value[0]),
         "hover_electrical_power": float(hover_electrical_power.value[0]),
+        "oei_thrust_margin": (float(oei_thrust_margin.value[0])
+                              if oei_thrust_margin is not None else float("nan")),
         "acoustics": acoustics,
     }
     objective_values = {}
@@ -565,6 +622,16 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
                                 if hover_torque_margin is not None else None),
         "cruise_torque_margin": (float(cruise_torque_margin.value[0])
                                  if cruise_torque_margin is not None else None),
+        "oei_rpm": (float(oei_rpm.value[0]) if oei_active else None),
+        "oei_pitch_deg": (float(np.rad2deg(hover_pitch.value[0])) if oei_active else None),  # = hover collective
+        "oei_thrust": (float(oei_thrust.value[0]) if oei_thrust is not None else None),
+        "oei_thrust_margin": (float(oei_thrust_margin.value[0])
+                              if oei_thrust_margin is not None else None),
+        "oei_torque_nm": (float(oei_torque.value[0]) if oei_torque is not None else None),
+        "oei_torque_margin": (float(oei_torque_margin.value[0])
+                              if oei_torque_margin is not None else None),
+        "oei_motor_efficiency": (float(oei_motor_eff.value[0])
+                                 if hasattr(oei_motor_eff, "value") else oei_motor_eff),
         "taper": float(taper.value[0]),
         "twist_washout_deg": float(np.rad2deg(twist_washout.value[0])),
         "hover_max_sectional_cl": float(hover_max_cl.value[0]),

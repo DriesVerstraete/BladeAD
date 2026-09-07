@@ -95,6 +95,29 @@ def test_mcdonald_torque_floor_prevents_nan_at_near_zero_power():
     r.stop()
 
 
+def test_validate_case1_oei_slot_and_guards():
+    import BladeAD.optimisation.case as casemod
+    d = casemod.load_case_dict(os.path.join(CASES, "shahjahan_case1"))
+    names = [o["name"] for o in d["objectives"]]
+    assert names == ["hover_elec", "cruise_elec", "oei_margin"]
+    assert d["motor"]["model"] == "mcdonald" and d["motor"]["k_oei"] == 1.7
+
+    d1 = casemod.load_case_dict(os.path.join(CASES, "shahjahan_case1"))
+    casemod._validate(dict(d1), os.path.join(CASES, "shahjahan_case1"))       # good
+
+    # an OEI margin objective without a real motor model is rejected
+    bad = casemod.load_case_dict(os.path.join(CASES, "shahjahan_case1"))
+    bad["motor"] = {"model": "placebo", "efficiency": 0.95}
+    with pytest.raises(ValueError):
+        casemod._validate(dict(bad), os.path.join(CASES, "shahjahan_case1"))
+
+    # a malformed oei_rpm bound is rejected
+    bad2 = casemod.load_case_dict(os.path.join(CASES, "shahjahan_case1"))
+    bad2["bounds"] = dict(bad2["bounds"], oei_rpm=(3440.0, 200.0))
+    with pytest.raises(ValueError):
+        casemod._validate(dict(bad2), os.path.join(CASES, "shahjahan_case1"))
+
+
 def test_validate_accepts_mcdonald_case_and_rejects_bad_overload():
     from BladeAD.optimisation.case import load_case_dict
     case = load_case_dict(os.path.join(CASES, "shahjahan_test_motor_mcdonald"))

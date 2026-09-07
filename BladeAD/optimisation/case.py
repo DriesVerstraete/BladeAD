@@ -188,18 +188,34 @@ def _validate(case, case_dir):
             raise ValueError(f"operating.{pt} needs altitude_m, airspeed_m_s, thrust_n")
 
     specs = parse_objectives(case["objectives"])   # raises on a malformed spec / bad proxy count
-    if any(s.name == "electrical_power" for s in specs if s.role != "reserved"):
+    if any(s.result_key in ("cruise_electrical_power", "hover_electrical_power")
+           for s in specs if s.role != "reserved"):
         m = case.get("motor")
         if not isinstance(m, dict) or m.get("model") not in ("placebo", "mcdonald", "emrax188"):
             raise ValueError(
-                "objective 'electrical_power' needs case['motor'] = "
+                "an electrical-power objective needs case['motor'] = "
                 "{'model': 'placebo'|'mcdonald'|'emrax188', ...}")
         if m["model"] == "placebo" and not (0.0 < float(m.get("efficiency", 0.0)) <= 1.0):
             raise ValueError("motor 'placebo' needs efficiency in (0, 1]")
         if m["model"] in ("mcdonald", "emrax188"):
-            for kk in ("k_hover", "k_cruise"):
+            for kk in ("k_hover", "k_cruise", "k_oei"):
                 if kk in m and not (isinstance(m[kk], (int, float)) and m[kk] > 0.0):
                     raise ValueError(f"motor {kk!r} must be a positive number")
+
+    live_specs = [s for s in specs if s.role != "reserved"]
+    if any(s.result_key == "oei_thrust_margin" for s in live_specs):
+        m = case.get("motor")
+        if not isinstance(m, dict) or m.get("model") not in ("mcdonald", "emrax188"):
+            raise ValueError(
+                "an 'oei_thrust_margin' objective needs case['motor'] with model "
+                "'mcdonald' or 'emrax188' -- the torque envelope is what bounds OEI thrust")
+        if "oei_rpm" in case["bounds"]:
+            b = case["bounds"]["oei_rpm"]
+            if not (isinstance(b, (list, tuple)) and len(b) == 2 and b[0] < b[1]):
+                raise ValueError("bounds.'oei_rpm' must be a (lo, hi) pair with lo < hi")
+        mom = case["constraints"].get("min_oei_thrust_margin")
+        if mom is not None and not (isinstance(mom, (int, float)) and mom > 0.0):
+            raise ValueError("constraints.min_oei_thrust_margin must be a positive number or absent")
 
     af = case["airfoil"]
     tbl = af.get("table_dir")

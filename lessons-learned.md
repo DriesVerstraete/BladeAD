@@ -81,3 +81,21 @@ the correct C-order `(num_radial, num_azimuthal)` layout, so a plain `.reshape(c
 the stations up. Applies to any elementwise op (`/`, `*`, `-`) between a csdl sectional Variable
 and a numpy per-station array.
 **Confirmed:** 2026-09-07, `solve.py::_stall_ratio` fix (2 hunks, `shahjahan_case1_fpp_explore`).
+
+## 5. Warm-starting a near-unconstrained single-objective extreme diverges -- run the non-proxy anchor COLD, seed only the proxy anchor
+
+**What:** for a pairwise Pareto edge you need both endpoints. The sweep-slot's own
+single-objective extreme (`direct_solve(ctx, name)` -- e.g. min `hover_elec`, a `cap`
+objective, with only the thrust equalities + stall/taper/torque active) is a well-posed
+problem that SLSQP solves cleanly **cold**. Warm-starting it from a far geometry (an NSGA-II
+basin point at the other end of the edge) makes SLSQP diverge -- it "converges" and returns
+a point with `hover_thrust` ~160× the target. This is exactly what `sweep_common.objective_anchor`'s
+"anchors do NOT warm-start" comment warns about. The **proxy** extreme (unconstrained
+`min_power_solve(ctx, {})`) is the opposite: it's the one a cold anchor historically truncated
+(the original FPP `hover_elec__cruise_elec` ε front, stuck in a high-rpm basin) -- seed *that*
+one from the NSGA basin.
+
+**How to apply:** `sweep_common.seeded_anchor` encodes the split -- proxy role → warm from the
+seed pkl; non-proxy → `warm=False` (cold). Don't "helpfully" seed both. Cost 2026-09-08:
+Pareto-tracer edge smoke #1, the seeded cold anchor returned garbage.
+**Confirmed:** 2026-09-08, `pareto_tracer.trace` / `seeded_anchor`.

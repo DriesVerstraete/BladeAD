@@ -142,6 +142,16 @@ _conf_master.py
 # Local optimization runs
 blade_optimization_outputs/
 patch_test_outputs/
+rotor_pareto_solve_outputs/
+
+# BladeAD/optimisation per-case run artefacts -- everything in a case dir is
+# regenerated from its case.py / *_run.py; only source (.py) is tracked.
+BladeAD/optimisation/cases/*/*.pkl
+BladeAD/optimisation/cases/*/*.csv
+BladeAD/optimisation/cases/*/*.json
+BladeAD/optimisation/cases/*/*.png
+BladeAD/optimisation/cases/*/*.log
+BladeAD/optimisation/cases/*/results/
 
 # Private local reference papers
 validation/acoustics/references/

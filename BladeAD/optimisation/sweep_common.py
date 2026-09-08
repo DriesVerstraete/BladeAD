@@ -28,6 +28,8 @@ import subprocess
 import sys
 import time
 
+import numpy as np
+
 from .case import parse_objectives, parse_epsilon_tag
 
 # every sweep solve enforces the vehicle cruise-noise cap
@@ -158,8 +160,11 @@ def nearest_warm(ctx, epsilons):
     return best
 
 
-def _solve(ctx, optimize, epsilons, warm):
-    """`warm`: a pkl path, None (auto-pick nearest), or False (no warm start)."""
+def _solve(ctx, optimize, epsilons, warm, with_acoustics=None):
+    """`warm`: a pkl path, None (auto-pick nearest), or False (no warm start).
+    `with_acoustics`: None keeps the BASE_OPTS default (True); pass False to
+    skip the acoustic graph (much faster -- used by the Pareto tracer, whose
+    reference fronts' anchors were also run acoustics-off)."""
     opts = {}
     if optimize is not None:
         opts["optimize"] = optimize
@@ -169,20 +174,22 @@ def _solve(ctx, optimize, epsilons, warm):
         warm = nearest_warm(ctx, epsilons or {})
     if warm:
         opts["initial_result_from"] = warm
+    if with_acoustics is not None:
+        opts["with_acoustics"] = bool(with_acoustics)
     return run_solve(ctx, opts)
 
 
-def min_power_solve(ctx, epsilons, warm=None):
+def min_power_solve(ctx, epsilons, warm=None, with_acoustics=None):
     """The working scalarisation: optimise the `proxy` (min cruise power) subject
     to `epsilons` = {objective_name: value}. Raises RuntimeError on a failed /
     past-the-feasibility-wall solve."""
-    return _solve(ctx, None, epsilons, warm)
+    return _solve(ctx, None, epsilons, warm, with_acoustics)
 
 
-def direct_solve(ctx, optimize, epsilons=None, warm=None):
+def direct_solve(ctx, optimize, epsilons=None, warm=None, with_acoustics=None):
     """Optimise a non-proxy objective `optimize` directly (max a `floor`, min a
     `cap`), optionally subject to `epsilons` on the remaining slots."""
-    return _solve(ctx, optimize, epsilons or {}, warm)
+    return _solve(ctx, optimize, epsilons or {}, warm, with_acoustics)
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +212,83 @@ def objective_anchor(ctx, name):
         # anchors: a warm start can pull SLSQP to a different local extreme).
         return registered_anchor(ctx, name, lambda: direct_solve(ctx, name, warm=False))
     return registered_anchor(ctx, name, lambda: _proxy_anchor_impl(ctx))
+
+
+def _vardict_from_flat(v):
+    """NSGA-II framework `Individual.var` (flat) -> the `var_dict` layout.
+    Layout: chord_cps[5], twist_cps_deg[5], hover_rpm, cruise_rpm, collective_deg,
+    [oei_rpm]."""
+    v = np.asarray(v, float).ravel()
+    d = {"chord_cps_m": v[0:5], "twist_cps_deg": v[5:10],
+         "hover_rpm": float(v[10]), "cruise_rpm": float(v[11]),
+         "collective_deg": float(v[12])}
+    if v.size > 13:
+        d["oei_rpm"] = float(v[13])
+    return d
+
+
+def nsga_geometry_to_seed(obj, out_path, *, fixed_pitch):
+    """Write an `initial_result_from`-format seed pkl from an NSGA-II artefact.
+
+    `obj` may be a result pkl dict (`front` / `final_population` of point dicts
+    with `var_dict`), a raw `var_dict`, an optimisation-history pkl (last
+    generation's first feasible individual), or an already-seed-shaped dict.
+    Converts the NSGA var names/units (`chord_cps_m`, `twist_cps_deg` in DEGREES,
+    `hover_rpm`, `collective_deg`) to what `solve.run(initial_result_from=...)`
+    reads (`chord_cps`, `twist_cps` in RADIANS, `rpm`, `pitch_deg` /
+    `hover_pitch_deg`, `oei_rpm`)."""
+    if isinstance(obj, dict) and "chord_cps" in obj:            # already seed-shaped
+        vd = None
+    elif isinstance(obj, dict) and obj.get("front"):
+        vd = obj["front"][0]["var_dict"]
+    elif isinstance(obj, dict) and obj.get("final_population"):
+        vd = obj["final_population"][0]["var_dict"]
+    elif isinstance(obj, dict) and "chord_cps_m" in obj:        # a raw var_dict
+        vd = obj
+    else:                                                       # history pkl / list
+        hist = obj["history"] if isinstance(obj, dict) else obj
+        pop = hist[-1]
+        pick = min((i for i in pop if float(getattr(i, "cons_sum", 1.0)) <= 1e-6),
+                   key=lambda i: float(i.objectives[0]) if hasattr(i, "objectives")
+                   else float(i.performance["_raw_obj"][0]), default=pop[0])
+        vd = _vardict_from_flat(pick.var)
+
+    if vd is None:
+        d = dict(obj)
+    else:
+        g = lambda k: np.ravel(np.asarray(vd[k], float))
+        d = {"chord_cps": g("chord_cps_m"),
+             "twist_cps": np.deg2rad(g("twist_cps_deg")),
+             "rpm": float(g("hover_rpm")[0]), "cruise_rpm": float(g("cruise_rpm")[0]),
+             "oei_rpm": (float(g("oei_rpm")[0]) if "oei_rpm" in vd else None)}
+        coll = float(g("collective_deg")[0])
+        if fixed_pitch:
+            d["pitch_deg"] = d["hover_pitch_deg"] = coll
+        else:
+            d["hover_pitch_deg"] = coll
+            d["cruise_pitch_deg"] = (float(g("cruise_pitch_deg")[0])
+                                     if "cruise_pitch_deg" in vd else coll)
+    with open(out_path, "wb") as f:
+        pickle.dump(d, f)
+    return out_path
+
+
+def seeded_anchor(ctx, name, seed_pkl, epsilons=None, with_acoustics=None):
+    """Single-objective extreme of slot `name`. Returns (pkl_path, data).
+
+    Unlike `objective_anchor`: no registry, no proxy-anchor bisection.
+
+    A `proxy` extreme (the unconstrained min-power end -- historically the one
+    that a cold SLSQP anchor truncated) is warm-started from `seed_pkl`, an
+    `initial_result_from`-format geometry (e.g. an NSGA-II basin). A non-proxy
+    extreme (`cap` min / `floor` max, thrust equalities active -- well-posed and
+    where a warm start from a far point tends to diverge) is run COLD, matching
+    `objective_anchor`. Pass `seed_pkl=False` to force the proxy end cold too."""
+    s = spec_by_name(ctx, name)
+    eps = dict(epsilons or {})
+    if s.role == "proxy":
+        return min_power_solve(ctx, eps, warm=seed_pkl, with_acoustics=with_acoustics)
+    return direct_solve(ctx, name, eps, warm=False, with_acoustics=with_acoustics)
 
 
 def _proxy_anchor_impl(ctx):

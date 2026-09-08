@@ -406,20 +406,22 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
     else:
         hover_extra = cruise_extra = None
 
-    hover_in, hover_out = _bem_point(chord_profile, twist_profile + hover_pitch, hover_rpm, spec,
-                                     hover, airfoil_model, norm_stations=norm_stations,
-                                     num_azimuthal=naz, extra_mesh_fields=hover_extra)
-    cruise_in, cruise_out = _bem_point(chord_profile, twist_profile + cruise_pitch, cruise_rpm, spec,
-                                       cruise, airfoil_model, norm_stations=norm_stations,
-                                       num_azimuthal=naz, extra_mesh_fields=cruise_extra)
+    from ._quiet import muffled as _muffled, QUIET_SOLVER as _QS
+    with _muffled(_QS):
+        hover_in, hover_out = _bem_point(chord_profile, twist_profile + hover_pitch, hover_rpm, spec,
+                                         hover, airfoil_model, norm_stations=norm_stations,
+                                         num_azimuthal=naz, extra_mesh_fields=hover_extra)
+        cruise_in, cruise_out = _bem_point(chord_profile, twist_profile + cruise_pitch, cruise_rpm, spec,
+                                           cruise, airfoil_model, norm_stations=norm_stations,
+                                           num_azimuthal=naz, extra_mesh_fields=cruise_extra)
 
-    oei_out = None
-    if oei_active:
-        # emergency hover = the hover blade (same collective) spun to oei_rpm
-        oei_op = OperatingPoint(altitude=hover.altitude, airspeed=hover.airspeed, thrust=hover.thrust)
-        _, oei_out = _bem_point(chord_profile, twist_profile + hover_pitch, oei_rpm, spec,
-                                oei_op, airfoil_model, norm_stations=norm_stations,
-                                num_azimuthal=1, extra_mesh_fields=None)
+        oei_out = None
+        if oei_active:
+            # emergency hover = the hover blade (same collective) spun to oei_rpm
+            oei_op = OperatingPoint(altitude=hover.altitude, airspeed=hover.airspeed, thrust=hover.thrust)
+            _, oei_out = _bem_point(chord_profile, twist_profile + hover_pitch, oei_rpm, spec,
+                                    oei_op, airfoil_model, norm_stations=norm_stations,
+                                    num_azimuthal=1, extra_mesh_fields=None)
 
     acoustic_bundle = None
     if acoustics_active:
@@ -562,12 +564,19 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
           f"cruise_thrust={cruise_out.total_thrust.value[0]:.1f}  "
           f"taper={taper.value[0]:.4f}  hover_max_cl={hover_max_cl.value[0]:.4f}")
 
-    sim = csdl.experimental.PySimulator(recorder=recorder)
     import modopt
     from modopt import CSDLAlphaProblem
-    prob = CSDLAlphaProblem(problem_name="rotor_pareto_solve", simulator=sim)
-    modopt.SLSQP(prob, solver_options={"maxiter": sweep["maxiter"],
-                                       "ftol": sweep.get("ftol", 1e-6)}).solve()
+    from ._quiet import muffled, QUIET_SOLVER
+    # PySimulator construction re-runs the graph once, and SLSQP re-evaluates
+    # the BEM every iteration -> the `bracketed_search converged` / csdl
+    # non-convergence dump lines. Silence them by default (flip
+    # `_quiet.QUIET_SOLVER` to see them). The constraint verification +
+    # "Saved to" report below stays visible.
+    with muffled(QUIET_SOLVER):
+        sim = csdl.experimental.PySimulator(recorder=recorder)
+        prob = CSDLAlphaProblem(problem_name="rotor_pareto_solve", simulator=sim)
+        modopt.SLSQP(prob, solver_options={"maxiter": sweep["maxiter"],
+                                           "ftol": sweep.get("ftol", 1e-6)}).solve()
 
     fm = float(hover_out.figure_of_merit.value[0])
     eta = float(cruise_out.efficiency.value[0])

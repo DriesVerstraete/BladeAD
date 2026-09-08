@@ -15,7 +15,13 @@ import copy
 from BladeAD.optimisation.cases.shahjahan_case1_fpp_explore_sm099.case import CASE as _BASE
 
 CASE = copy.deepcopy(_BASE)
-CASE["hybrid"] = {"n_anchors": 3, "scout_pop": 48, "scout_gens": 60, "seed": 1,
-                  "oei_levels": [1.143, 1.33, 1.52, 1.70, 1.85], "n_points": 12,
-                  "cluster_method": "kmeans", "force_scout": False,
-                  "cross_check": True, "cross_levels": [19300.0, 20000.0, 21000.0]}
+# hybrid driver config -- explicit pinned levels (from the manual tracer runs)
+# rather than "auto", so a re-run reproduces the reference surface exactly.
+CASE["hybrid"] = {
+    "n_anchors": 3, "scout_pop": 48, "scout_gens": 60, "seed": 1,
+    "scout_front_seed_from": ["../shahjahan_case1_fpp_explore_sm099"],
+    "n_points": 12, "cluster_method": "kmeans", "force_scout": False,
+    "with_acoustics": False, "cross_check": True,
+    "levels": {"oei_margin": [1.143, 1.33, 1.52, 1.70, 1.85],
+               "hover_elec": [19300.0, 20000.0, 21000.0]},
+}

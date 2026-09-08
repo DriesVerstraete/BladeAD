@@ -6,6 +6,14 @@ in the SPL rotor-optimisation project `roadmap.md`, not here.
 
 ## Open
 
+- **`forward.py` duplicates `solve.py`'s graph build** (2026-09-08). `forward.evaluate`
+  (the NSGA-II / population-method eval kernel) rebuilds the same BEM + motor +
+  stall-ratio graph as `solve.run()` lines ~362-540, minus the modopt plumbing.
+  Kept separate deliberately so the ε-constraint workflow carries zero risk from
+  the NSGA-II work. Reconcile by extracting a shared `build_graph(case, dvs,
+  *, as_design_vars)` that both call. Decision:
+  `06-rotor-optimisation/decisions/2026-09-08-nsga2-rotor-setup.md`.
+
 - **Section Cl_max, live-Re v2** -- `solve._section_clmax_profile` uses a fixed
   reference Reynolds per airfoil (`airfoil.clmax_ref_reynolds`). A v2 would
   interpolate Cl_max(Re) against the live per-station Re instead. Only worth it
@@ -50,6 +58,35 @@ in the SPL rotor-optimisation project `roadmap.md`, not here.
   scripts) is now superseded by
   `BladeAD/core/airfoil/mach_corrected_bspline_airfoil_model.py`. Point the frozen
   scripts at core, or leave them frozen.
+
+- **Pareto tracer Step 2b: CSDL-alpha `jac` for the BFGS predictor** (2026-09-08).
+  The generic predictor-corrector loop
+  (`optimisation_framework/gradient/pareto_tracer.py`) is backend-agnostic and
+  done; the BladeAD adapter (`BladeAD/optimisation/pareto_tracer.py`) currently
+  walks the front with the `secant` predictor (no derivatives). Step 2b wires
+  CSDL-alpha reverse-mode Jacobians into the bordered-KKT tangent so the
+  predictor becomes `bfgs`, landing each station close enough that the corrector
+  converges in 1-2 SLSQP iters instead of 4-5 (~2x trace speedup). Scope:
+  first-order Jacobians only (already extracted by `modopt.CSDLAlphaProblem`) --
+  NOT exact Hessians. ~0.5 d, low risk. **Trigger: do it only when a case shows
+  the corrector routinely taking 4-5+ SLSQP iters/station, or a trace visibly
+  stalls / step-shrinks repeatedly.** So far secant reproduces the corrected
+  epsilon front to ~1%. Decision:
+  `06-rotor-optimisation/decisions/2026-09-08-pareto-tracer-and-hybrid-pipeline.md`
+  ("Revisit exact Hessians only if tracing visibly stalls" -- same logic).
+
+- **Codex sandbox can't run the `rotor_design` workload** (2026-09-08, both hybrid
+  passes). Codex reports every dry run BLOCKED by: (1) `~/.matplotlib` / fontconfig
+  cache not writable, (2) an MPI `bind() ... Operation not permitted` on
+  `mca_btl_tcp_component_create_listen`. Claude works around (1) with
+  `MPLCONFIGDIR=/tmp/mpl-... MPLBACKEND=Agg`; (2) appears to be a harmless warning
+  (`mpi4py` import in the CSDL stack trying to open a listen socket) but the run
+  never gets far enough in the sandbox to confirm. **Check:** whether
+  `OMPI_MCA_btl=^tcp` / `OMPI_MCA_plm=isolated` (or dropping the `mpi4py` import
+  path entirely for a single-process solve) lets a Codex dry run complete, and
+  whether the MPL env vars belong in the repo `AGENTS.md` / a Codex profile so
+  every future pass has them. Until then Codex verifies by `py_compile` + unit
+  tests only and Claude runs the real dry run.
 
 ## Migration follow-ups (2026-09-07)
 

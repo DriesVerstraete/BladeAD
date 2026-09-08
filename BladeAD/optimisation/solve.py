@@ -253,7 +253,10 @@ def run_case_dir(case_dir, **opts):
 _OBJ_SCALER = {"cruise_power": _CRUISE_P_SCALER,
                "cruise_electrical_power": _CRUISE_P_SCALER,
                "hover_power": _CRUISE_P_SCALER,
-               "hover_electrical_power": _CRUISE_P_SCALER}
+               "hover_electrical_power": _CRUISE_P_SCALER,
+               # match the acoustic constraint scaler (0.1) when cruise noise is
+               # the directly-optimised objective (~64 dB -> ~6.4).
+               "acoustics.cruise_vehicle_ospl_db": 0.1}
 
 
 def _dotted(d, path):
@@ -293,10 +296,31 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
     # an acoustic objective (as target or epsilon, or -- since the sweep always
     # runs with_acoustics -- whenever it is a live objective) needs the acoustic
     # graph built so its value can be read back.
-    ac_cap = next((s for s in live if s.is_acoustic and s.role == "cap"), None)
     acoustics_active = (with_acoustics or tspec.is_acoustic
                         or any(by_name[k].is_acoustic for k in epsilons))
-    hover_noise_max = epsilons.get(ac_cap.name) if ac_cap is not None else None
+    # Acoustic slots are constrained INSIDE add_spl_hover_cruise_acoustics (a
+    # csdl acoustic quantity is not in `result_vars` for the generic epsilon
+    # loop, which skips `is_acoustic` slots -- see below). Resolve here, before
+    # that builder call, what each acoustic knob should be for THIS solve:
+    #   - a pinned acoustic epsilon  -> a per-solve cap fed to the builder
+    #   - an acoustic slot as the swept target -> drive it via the objective,
+    #     do NOT also hard-cap it (constrain_cruise=False)
+    #   - neither -> the case-default cap, unchanged (every existing case)
+    _CRUISE_OSPL_KEY = "acoustics.cruise_vehicle_ospl_db"
+    _HOVER_OSPL_KEY = "acoustics.hover_ospl_db"
+    cruise_noise_cap = None
+    constrain_cruise_noise = True
+    hover_noise_max = None
+    if acoustics_active:
+        cruise_noise_cap = float(case["acoustic"]["cruise_noise_cap_db"])
+        for _n in epsilons:
+            _rk = by_name[_n].result_key
+            if _rk == _CRUISE_OSPL_KEY:
+                cruise_noise_cap = float(epsilons[_n])  # pinned cruise-noise level
+            elif _rk == _HOVER_OSPL_KEY:
+                hover_noise_max = float(epsilons[_n])   # pinned hover-noise level
+        if tspec.result_key == _CRUISE_OSPL_KEY:
+            constrain_cruise_noise = False              # swept target drives it
     constraints = case["constraints"]
     sweep = case["sweep"]
     spec = _spec_from_case(case)
@@ -428,9 +452,9 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         acoustic_bundle = add_spl_hover_cruise_acoustics(
             hover_in, hover_out, cruise_in, cruise_out,
             n_rotors=case["acoustic"]["n_rotors"],
-            cruise_cap_db=case["acoustic"]["cruise_noise_cap_db"],
+            cruise_cap_db=cruise_noise_cap,
             hover_noise_max_db=hover_noise_max,
-            constrain_cruise=True)
+            constrain_cruise=constrain_cruise_noise)
 
     taper = chord_profile[-1] / chord_profile[0]
     twist_washout = twist_profile[0] - twist_profile[-1]
@@ -525,6 +549,7 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         result_vars["oei_thrust_margin"] = oei_thrust_margin
     if acoustic_bundle is not None:
         result_vars["acoustics.hover_ospl_db"] = acoustic_bundle.hover_ospl
+        result_vars["acoustics.cruise_vehicle_ospl_db"] = acoustic_bundle.cruise_vehicle_ospl
 
     # --- the objective the solver drives directly ---
     if tspec.role == "proxy":
@@ -630,7 +655,9 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
     if acoustic_bundle is not None:
         def _s(v):
             return None if v is None else float(np.asarray(v.value).reshape(-1)[0])
-        cap = case["acoustic"]["cruise_noise_cap_db"]
+        # the cap actually applied this solve (a pinned acoustic epsilon or the
+        # swept-target case both move it off the static case default)
+        cap = cruise_noise_cap
         acoustics = {
             "n_rotors": case["acoustic"]["n_rotors"],
             "hover_ospl_db": _s(acoustic_bundle.hover_ospl),
@@ -644,10 +671,12 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
             "cruise_noise_cap_db": cap,
             "hover_noise_max_db": hover_noise_max,
         }
-        checks["cruise vehicle noise <= cap"] = acoustics["cruise_vehicle_ospl_db"] <= cap + 1e-3
+        if constrain_cruise_noise:
+            checks["cruise vehicle noise <= cap"] = acoustics["cruise_vehicle_ospl_db"] <= cap + 1e-3
+        _cap_txt = f"cap {cap}" if constrain_cruise_noise else "no cap -- swept objective"
         print(f"\nNoise: hover OSPL {acoustics['hover_ospl_db']:.2f} dB "
               f"({acoustics['hover_ospl_a_weighted_db']:.2f} dBA)  "
-              f"cruise vehicle {acoustics['cruise_vehicle_ospl_db']:.2f} dB (cap {cap})")
+              f"cruise vehicle {acoustics['cruise_vehicle_ospl_db']:.2f} dB ({_cap_txt})")
 
     # --- per-slot objective values + generic epsilon-constraint checks ---
     _reported = {

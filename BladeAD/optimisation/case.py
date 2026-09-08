@@ -75,6 +75,8 @@ _CANONICAL_SPECS = {
                     "label": "cruise efficiency"},
     "hover_noise": {"name": "hover_noise", "result_key": "acoustics.hover_ospl_db",
                     "goal": "min", "role": "cap", "label": "hover noise (dB)"},
+    "cruise_noise": {"name": "cruise_noise", "result_key": "acoustics.cruise_vehicle_ospl_db",
+                     "goal": "min", "role": "cap", "label": "cruise vehicle noise (dB)"},
     # alternative proxy to eta_cruise: minimise cruise electrical input power.
     # needs case["motor"] (placebo = fixed efficiency, or a real BladeAD motor model).
     "electrical_power": {"name": "electrical_power", "result_key": "cruise_electrical_power",

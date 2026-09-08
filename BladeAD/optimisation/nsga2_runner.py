@@ -93,6 +93,13 @@ class RotorNSGA2Setup:
                 raise ValueError(f"objective_names {keep} not all present in case "
                                  f"objectives {[s.name for s in active_objectives(case)]}")
         self.obj_names = [s.name for s in self.objs]
+        _ac = [s.name for s in self.objs if s.is_acoustic]
+        if _ac:
+            raise ValueError(
+                f"NSGA-II scout cannot evaluate acoustic objective(s) {_ac}: "
+                f"forward.evaluate computes no acoustic quantity. Restrict the "
+                f"scout to the BEM-computable objectives via objective_names / "
+                f"CASE['hybrid']['scout_objectives'].")
         self.oei = any(s.result_key == "oei_thrust_margin" for s in self.objs)
 
         b = case["bounds"]

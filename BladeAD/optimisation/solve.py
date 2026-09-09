@@ -268,7 +268,7 @@ def _dotted(d, path):
 
 def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         with_acoustics=False, initial_result_from=None, pin_geometry_from=None,
-        hover_thrust_scale=1.0):
+        hover_thrust_scale=1.0, maxiter=None):
     """One BEM + acoustic optimisation for the case.
 
     Objective identity comes from `specs` (`case.parse_objectives`, resolved by
@@ -608,7 +608,11 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
     with muffled(QUIET_SOLVER):
         sim = csdl.experimental.PySimulator(recorder=recorder)
         prob = CSDLAlphaProblem(problem_name="rotor_pareto_solve", simulator=sim)
-        modopt.SLSQP(prob, solver_options={"maxiter": sweep["maxiter"],
+        # `maxiter` override (default None -> the case sweep value): a caller
+        # doing a pure evaluation of a pinned geometry passes maxiter=1 so the
+        # full (acoustic) graph is built and read back without a real optimise.
+        _maxiter = sweep["maxiter"] if maxiter is None else int(maxiter)
+        modopt.SLSQP(prob, solver_options={"maxiter": _maxiter,
                                            "ftol": sweep.get("ftol", 1e-6)}).solve()
 
     fm = float(hover_out.figure_of_merit.value[0])

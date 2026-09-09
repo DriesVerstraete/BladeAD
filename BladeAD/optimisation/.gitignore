@@ -8,3 +8,5 @@ cases/**/*.log
 cases/**/*.png
 cases/**/*_outputs/
 cases/**/hover_seed*.pkl
+cases/**/_*/
+cases/**/*.csv

@@ -29,6 +29,12 @@ CASE = copy.deepcopy(_BASE)
 
 CASE["constraints"].pop("min_oei_thrust_margin", None)
 
+# The acoustic solve resolves the rotor azimuthally (num_azimuthal =
+# NUM_AZIMUTHAL_ACOUSTIC, not 1), so the coupled hover+cruise BEM+motor+acoustic
+# problem needs more SLSQP headroom than the non-acoustic FPP chain's 200 to
+# close thrust / stall / torque from a warm start.
+CASE["sweep"]["maxiter"] = 400
+
 CASE["objectives"] = [
     {"name": "hover_elec",   "result_key": "hover_electrical_power",  "goal": "min", "role": "cap",
      "label": "hover electrical power (W)"},

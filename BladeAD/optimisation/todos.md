@@ -13,6 +13,17 @@ in the SPL rotor-optimisation project `roadmap.md`, not here.
   the NSGA-II work. Reconcile by extracting a shared `build_graph(case, dvs,
   *, as_design_vars)` that both call. Decision:
   `06-rotor-optimisation/decisions/2026-09-08-nsga2-rotor-setup.md`.
+  **Elevated 2026-09-09 (PI):** `forward.py` computes **no acoustic quantity**, so
+  `cruise_noise` / `hover_noise` cannot be NSGA-II scout objectives (`nsga2_runner`
+  raises `ValueError` on an acoustic scout slot). For the rotor noise case this
+  means the scout can miss a separate low-noise basin. Port
+  `add_spl_hover_cruise_acoustics` into `forward.evaluate` (naturally falls out of
+  the shared-`build_graph` refactor) + expose `cruise_noise` in `_RESULT_KEY_MAP`.
+  Then run the acoustic scout **parallel** (`nsga2_runner.run(n_workers=...)` ->
+  `optimisation_framework` `multiprocess.Pool`; today `n_workers=1`) so the ~10-100x
+  acoustic-eval cost stays tens-of-minutes, not hours. Interim workaround
+  (Option D) is a post-hoc acoustic sweep of the BEM scout's final population --
+  see `06-rotor-optimisation/briefs/noise-objective-deblock-steps.md`.
 
 - **Section Cl_max, live-Re v2** -- `solve._section_clmax_profile` uses a fixed
   reference Reynolds per airfoil (`airfoil.clmax_ref_reynolds`). A v2 would

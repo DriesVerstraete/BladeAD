@@ -313,14 +313,22 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
     hover_noise_max = None
     if acoustics_active:
         cruise_noise_cap = float(case["acoustic"]["cruise_noise_cap_db"])
+        _cn_pinned = False
         for _n in epsilons:
             _rk = by_name[_n].result_key
             if _rk == _CRUISE_OSPL_KEY:
                 cruise_noise_cap = float(epsilons[_n])  # pinned cruise-noise level
+                _cn_pinned = True
             elif _rk == _HOVER_OSPL_KEY:
                 hover_noise_max = float(epsilons[_n])   # pinned hover-noise level
-        if tspec.result_key == _CRUISE_OSPL_KEY:
-            constrain_cruise_noise = False              # swept target drives it
+        # A live cruise-noise objective is a SWEPT axis -- it carries no static
+        # cap (case["acoustic"]["cruise_noise_cap_db"] belongs to the
+        # constraint-only acoustic-proxy cases where noise is NOT an objective).
+        # Its interior layers still constrain it, through the pinned-epsilon
+        # branch above. This also covers noise as the current solve's target.
+        _cn_is_objective = any(s.result_key == _CRUISE_OSPL_KEY for s in live)
+        if _cn_is_objective and not _cn_pinned:
+            constrain_cruise_noise = False
     constraints = case["constraints"]
     sweep = case["sweep"]
     spec = _spec_from_case(case)

@@ -44,6 +44,8 @@ _RESULT_KEY_MAP = {
     "figure_of_merit": "figure_of_merit",
     "cruise_efficiency": "cruise_efficiency",
     "oei_thrust_margin": "oei_thrust_margin",
+    "acoustics.cruise_vehicle_ospl_db": "cruise_noise",
+    "acoustics.hover_ospl_db": "hover_noise",
 }
 
 _VAR_GROUPS = ("chord_cps_m", "twist_cps_deg", "hover_rpm", "cruise_rpm", "collective_deg")
@@ -94,12 +96,9 @@ class RotorNSGA2Setup:
                                  f"objectives {[s.name for s in active_objectives(case)]}")
         self.obj_names = [s.name for s in self.objs]
         _ac = [s.name for s in self.objs if s.is_acoustic]
-        if _ac:
-            raise ValueError(
-                f"NSGA-II scout cannot evaluate acoustic objective(s) {_ac}: "
-                f"forward.evaluate computes no acoustic quantity. Restrict the "
-                f"scout to the BEM-computable objectives via objective_names / "
-                f"CASE['hybrid']['scout_objectives'].")
+        if any(s.result_key == "acoustics.hover_ospl_db" for s in self.objs):
+            raise ValueError("hover_noise is diagnostic-only and cannot be a scout objective")
+        self.with_acoustics = bool(_ac)
         self.oei = any(s.result_key == "oei_thrust_margin" for s in self.objs)
 
         b = case["bounds"]
@@ -182,7 +181,8 @@ class RotorNSGA2Setup:
 
     def obj_func(self, x_dict, **kw):
         with _muffle():
-            r = forward.evaluate(self.case, x_dict, oei=self.oei)
+            r = forward.evaluate(self.case, x_dict, oei=self.oei,
+                                 with_acoustics=self.with_acoustics)
         ks = _ks([r["hover_thrust_overshoot"], r["cruise_thrust_overshoot"]],
                  self.ks_rho, self.overshoot_ks_cap)
         factor = 1.0 + self.overshoot_mu * ks

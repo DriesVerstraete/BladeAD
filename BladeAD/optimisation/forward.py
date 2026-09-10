@@ -26,6 +26,12 @@ from BladeAD.utils.var_groups import RotorAnalysisInputs, RotorMeshParameters, A
 from BladeAD.utils.parameterization import BsplineParameterization
 
 from . import solve as _s
+from .acoustics import (
+    NUM_AZIMUTHAL_ACOUSTIC,
+    acoustic_mesh_fields,
+    add_spl_hover_cruise_acoustics,
+    thickness_to_chord_profile,
+)
 
 
 def _stall_ratio_value(bem_out, clmax_profile, num_radial):
@@ -70,16 +76,16 @@ def _failed_result(case, oei):
     return d
 
 
-def evaluate(case, x, *, oei=False):
+def evaluate(case, x, *, oei=False, with_acoustics=False):
     try:
-        return _evaluate(case, x, oei=oei)
+        return _evaluate(case, x, oei=oei, with_acoustics=with_acoustics)
     except Exception as exc:                     # noqa: BLE001  -- any solver failure
         d = _failed_result(case, oei)
         d["_error"] = f"{type(exc).__name__}: {exc}"
         return d
 
 
-def _evaluate(case, x, *, oei=False):
+def _evaluate(case, x, *, oei=False, with_acoustics=False):
     """One forward BEM eval.
 
     `x` -- dict with keys: chord_cps_m (n_chord_cps,), twist_cps_deg
@@ -135,12 +141,21 @@ def _evaluate(case, x, *, oei=False):
         # clamp (SLSQP only clamps for acoustics/OEI).
         airfoil_model = _s._airfoil_model(case, clamp_reynolds=True)
 
-        _, hover_out = _s._bem_point(chord_profile, twist_profile + collective, hover_rpm,
+        naz = NUM_AZIMUTHAL_ACOUSTIC if with_acoustics else 1
+        if with_acoustics:
+            tc = thickness_to_chord_profile(
+                case["airfoil"]["section_boundaries_r_over_r"], case["airfoil"]["t_over_c"],
+                r_over_R)
+        hover_in, hover_out = _s._bem_point(chord_profile, twist_profile + collective, hover_rpm,
                                      spec, hover, airfoil_model, norm_stations=norm_stations,
-                                     num_azimuthal=1)
-        _, cruise_out = _s._bem_point(chord_profile, twist_profile + collective, cruise_rpm,
+                                     num_azimuthal=naz,
+                                     extra_mesh_fields=(acoustic_mesh_fields(tc)
+                                                        if with_acoustics else None))
+        cruise_in, cruise_out = _s._bem_point(chord_profile, twist_profile + collective, cruise_rpm,
                                       spec, cruise, airfoil_model, norm_stations=norm_stations,
-                                      num_azimuthal=1)
+                                      num_azimuthal=naz,
+                                      extra_mesh_fields=(acoustic_mesh_fields(tc)
+                                                         if with_acoustics else None))
         oei_out = None
         if oei:
             oei_rpm = csdl.Variable(value=np.array([float(x["oei_rpm"])]))
@@ -193,6 +208,17 @@ def _evaluate(case, x, *, oei=False):
             "cruise_rpm": float(cruise_rpm.value[0]),
             "collective_deg": float(np.rad2deg(collective0)),
         }
+        if with_acoustics:
+            acoustics = add_spl_hover_cruise_acoustics(
+                hover_in, hover_out, cruise_in, cruise_out,
+                n_rotors=case["acoustic"]["n_rotors"], constrain_cruise=False)
+            out.update({
+                "cruise_noise": float(acoustics.cruise_vehicle_ospl.value[0]),
+                "cruise_single_noise": float(acoustics.cruise_single_ospl.value[0]),
+                "hover_noise": float(acoustics.hover_ospl.value[0]),
+                "cruise_tonal_noise": float(acoustics.cruise.tonal_spl.value[0]),
+                "cruise_broadband_noise": float(acoustics.cruise.broadband_spl.value[0]),
+            })
         if oei:
             oei_motor = _s.evaluate_case_motor(
                 motor_cfg, oei_rpm, oei_out.total_power,

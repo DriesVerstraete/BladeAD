@@ -132,6 +132,11 @@ class RotorNSGA2Setup:
                 names += ["torque_oei"]
             if self.case["constraints"].get("min_oei_thrust_margin") is not None:
                 names += ["oei_margin_floor"]
+        # optional loose hover-power cap -- lets a scout pose hover_elec as a
+        # constraint instead of an objective (e.g. the {cruise_noise,
+        # cruise_elec} acoustic scout: hover power bounded, not traded).
+        if self.case["constraints"].get("max_hover_elec_w") is not None:
+            names += ["hover_elec_cap"]
         return names
 
     def _constraints(self, r):
@@ -159,6 +164,9 @@ class RotorNSGA2Setup:
             if "oei_margin_floor" in self._con_names:
                 fl = float(c["min_oei_thrust_margin"])
                 g["oei_margin_floor"] = (fl - r["oei_thrust_margin"]) / fl
+        if "hover_elec_cap" in self._con_names:
+            hcap = float(c["max_hover_elec_w"])
+            g["hover_elec_cap"] = (r["hover_electrical_power"] - hcap) / hcap
         return np.array([g[n] for n in self._con_names], dtype=float)
 
     # -- optimisation_framework hooks ---------------------------------------

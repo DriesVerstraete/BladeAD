@@ -60,6 +60,8 @@ DEFAULTS = {
     "n_anchors": 3,
     "scout_pop": 48,
     "scout_gens": 60,
+    "scout_workers": 1,             # >1 -> multiprocess.Pool (acoustic scout is
+                                    # ~10-100x a BEM eval -- parallel matters)
     "scout_objectives": None,
     "scout_front_seed_from": None,   # dir(s) of feasible stage1_*.pkl to seed the
                                      # initial scout population (faster feasibility)
@@ -240,8 +242,8 @@ def _run_scout(ctx, case_dir, cfg, dry_run):
         print(f"reusing cached scout {scout_path}", flush=True)
         return pickle.load(open(scout_path, "rb"))
     kwargs = dict(pop_size=cfg["scout_pop"], n_gen=cfg["scout_gens"], seed=cfg["seed"],
-                  algorithm="nsga2", save_tag="hybrid_scout",
-                  objective_names=cfg["scout_objectives"])
+                  n_workers=cfg["scout_workers"], algorithm="nsga2",
+                  save_tag="hybrid_scout", objective_names=cfg["scout_objectives"])
     seed_from = cfg["scout_front_seed_from"]
     if dry_run and not seed_from:
         seed_from = ["../shahjahan_case1_fpp_explore_sm099"]

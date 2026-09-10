@@ -77,6 +77,7 @@ class TestConfig(unittest.TestCase):
         self.assertIs(DEFAULTS["cross_check"], True)
         self.assertEqual(DEFAULTS["levels"], {})
         self.assertIn("scout_objectives", DEFAULTS)
+        self.assertEqual(DEFAULTS["scout_workers"], 1)   # serial unless a case opts in
         self.assertNotIn("oei_levels", DEFAULTS)
 
     def test_resolve_levels_explicit_is_passthrough(self):

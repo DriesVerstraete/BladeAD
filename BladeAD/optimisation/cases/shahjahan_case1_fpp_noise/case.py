@@ -52,21 +52,43 @@ CASE["objectives"] = [
      "label": "cruise vehicle noise (dB)"},
 ]
 
-# DENSE one-shot run (PI, 2026-09-11) -- acoustic scout + dense tracer surface
-# in one command, meant to run overnight. `scout_objectives` is now the ACOUSTIC
-# pair (a BEM-only scout is noise-blind and cannot find a quieter basin -- the
-# whole reason for the forward.evaluate acoustics port); `hover_elec` is bounded
-# by `constraints.max_hover_elec_w` above during the scout, and remains a full
-# swept objective in the tracer stage. `n_points` / `auto_levels` / `n_anchors`
-# bumped ~3x over the 72-pt 2026-09-10 run. `force_scout` -- do NOT reuse that
-# run's BEM-only cached scout.
+# DENSE one-shot run (PI, 2026-09-11). Acoustic scout + dense tracer surface in
+# one overnight command. `scout_objectives` = the ACOUSTIC pair (a BEM-only
+# scout is noise-blind). `hover_elec` bounded during the scout by
+# `constraints.max_hover_elec_w`; full swept objective in the tracer stage.
+#
+# RUN 2 (00:35, after run 1 killed at gen 45): run 1 seeded the scout from the
+# sm099 EFFICIENT edge -> it collapsed to a high-RPM SKINNY blade at ~76.7 dB,
+# ~4 dB LOUDER than the 2026-09-10 tracer floor (72.75), never near the quiet
+# fat-low-RPM family. Fix (the "test = can we find a different basin"): seed the
+# scout from a SPREAD of the tracer's own noise front (72.04 -> 81 dB), soften
+# the KS overshoot penalty (mu 10 -> 2 -- it was crushing RPM-reduction moves)
+# and widen mutation, so the population holds the known front and probes for
+# anything BELOW it. Morning check: min feasible cruise_noise over the whole
+# scout history vs 72.75.
 CASE["hybrid"] = {
     "n_anchors": 3,
     "scout_pop": 96,
     "scout_gens": 150,
     "scout_workers": 4,
     "scout_objectives": ["cruise_elec", "cruise_noise"],   # = active_objectives order
-    "scout_front_seed_from": ["../shahjahan_case1_fpp_explore_sm099"],
+    "scout_front_seed_from": [
+        "stage1_opt-cruise_elec_grid-cosine32_ac_pinned.pkl",                                   # 72.04
+        "stage1_opt-cruise_elec_grid-cosine32_ac_eps-cruise_noise=72.7488.pkl",                  # 72.75
+        "stage1_opt-cruise_elec_grid-cosine32_ac_eps-cruise_noise=73.0640_eps-hover_elec=22521.1856.pkl",
+        "stage1_opt-cruise_elec_grid-cosine32_ac_eps-cruise_noise=74.0058_eps-hover_elec=21025.4307.pkl",
+        "stage1_opt-cruise_elec_grid-cosine32_ac_eps-hover_elec=21025.4307.pkl",                 # 74.58
+        "stage1_opt-cruise_noise_grid-cosine32_eps-hover_elec=19529.6757.pkl",                   # 76.78
+        "stage1_opt-cruise_elec_grid-cosine32_ac_eps-hover_elec=19514.8203.pkl",                 # 77.37
+        "stage1_opt-hover_elec_grid-cosine32_ac.pkl",                                            # 81.11
+    ],
+    "scout_kwargs": {
+        "overshoot_mu": 2.0,        # was 10 -- softened; RPM-reduction moves survive
+        "seed_clone_frac": 0.35,
+        "seed_clone_sigma": 0.15,
+        "eta_m": 6.0,               # wider polynomial mutation (basin-hop)
+        "eta_c": 12.0,
+    },
     "seed": 1,
     "n_points": 18,
     "cluster_method": "kmeans",

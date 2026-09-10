@@ -63,8 +63,12 @@ DEFAULTS = {
     "scout_workers": 1,             # >1 -> multiprocess.Pool (acoustic scout is
                                     # ~10-100x a BEM eval -- parallel matters)
     "scout_objectives": None,
-    "scout_front_seed_from": None,   # dir(s) of feasible stage1_*.pkl to seed the
-                                     # initial scout population (faster feasibility)
+    "scout_front_seed_from": None,   # dir(s) OR individual stage1_*.pkl paths
+                                     # (relative to the case dir) to seed the
+                                     # initial scout population
+    "scout_kwargs": {},              # extra nsga2_runner.run kwargs for the scout
+                                     # (overshoot_mu, seed_clone_frac/sigma,
+                                     # eta_c/eta_m, ...)
     "seed": 1,
     "n_points": 12,
     "cluster_method": "kmeans",
@@ -249,6 +253,7 @@ def _run_scout(ctx, case_dir, cfg, dry_run):
         seed_from = ["../shahjahan_case1_fpp_explore_sm099"]
     if seed_from:
         kwargs["front_seed_from"] = [ctx.out(p) if p.startswith("..") else p for p in seed_from]
+    kwargs.update(cfg.get("scout_kwargs") or {})
     nsga2_runner.run(case_dir, **kwargs)
     return pickle.load(open(scout_path, "rb"))
 

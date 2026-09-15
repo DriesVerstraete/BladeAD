@@ -6,14 +6,44 @@ branch). This file logs every local modification, matching the pattern used for 
 (`999-software/rcaide/local-patches.md`) — check here before diffing against upstream or
 investigating "unexpected" BladeAD behavior.
 
+## 2026-09-15 — Expose sectional Cl as a `RotorAnalysisOutputs` field (Pitt-Peters)
+
+**File:** `BladeAD/core/pitt_peters/pitt_peters_inflow.py`.
+
+**What:** same pattern as the 2026-08-10 BEM patch below. `Cl` is already a real, in-graph
+`csdl.Variable` inside `solve_for_steady_state_inflow()` (used to build `Cx`/`Ct`), accumulated
+per-node into a new `Cl_container` alongside the function's existing per-node containers
+(`dT_container`, `dQ_container`, ...), and attached as `outputs.sectional_lift_coefficient =
+Cl_container` — replacing the dead, commented-out `# outputs.Cl = Cl` line. No new computation.
+`sectional_drag_coefficient` NOT added (not needed yet; add analogously if it becomes needed).
+
+**Why:** rotor-optimisation project's transition-point capability
+(`06-rotor-optimisation/notes/2026-09-15-transition-point-scoping.md`) needs `PittPetersModel`
+(oblique flow, Shahjahan 2024 Table 6 transition conditions) for a stall/max_cl constraint —
+without this, a transition point had no stall protection at all in a real optimisation.
+
+**Verification:** `pytest tests/optimisation/` 26/26 (default path unchanged — no case sets
+`case["transition"]`, so `PittPetersModel` isn't invoked at all outside this feature). Direct
+check: `06-rotor-optimisation`'s `transition_pinned_solve.py` — before the patch,
+`transition_max_sectional_cl` read back `None` (`AttributeError`/`ValueError` guarded, not
+silently wrong); after, it reads `1.614` and the stall constraint correctly *fails* on a
+geometry that was never optimised for this oblique condition (matches Shahjahan's own finding
+that transition needs extra twist specifically to avoid stall — a real, expected result, not a
+bug).
+
+**Consequence if not patched:** any Pitt-Peters-based point (transition or otherwise) runs with
+zero stall protection — an optimiser could push the blade into deep stall at that condition
+without any constraint ever catching it.
+
 ## 2026-08-10 — Expose sectional Cl/Cd as `RotorAnalysisOutputs` fields (BEM only)
 
 **Files:** `BladeAD/core/BEM/compute_quantities_of_interest.py`,
 `BladeAD/utils/var_groups.py`
 
 **What:** added `sectional_lift_coefficient`/`sectional_drag_coefficient` fields to
-`RotorAnalysisOutputs` (both optional, default `None` — `Pitt-Peters`/`Peters-He` don't populate
-them), and set them from the already-computed `Cl`/`Cd` local variables inside
+`RotorAnalysisOutputs` (both optional, default `None` — at the time, `Pitt-Peters`/`Peters-He`
+didn't populate them either; `sectional_lift_coefficient` was extended to Pitt-Peters
+2026-09-15, see below), and set them from the already-computed `Cl`/`Cd` local variables inside
 `compute_quantities_of_interest()` right before it returns `bem_outputs`.
 
 **Why:** `Cl`/`Cd` are already real, in-graph `csdl.Variable`s inside `BEMModel.evaluate()`

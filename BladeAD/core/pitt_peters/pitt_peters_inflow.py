@@ -66,6 +66,14 @@ def solve_for_steady_state_inflow(
     FoM_container = csdl.Variable(shape=(num_nodes, ), value=0)
     inflow_container = csdl.Variable(shape=(num_nodes, num_radial, num_azimuthal), value=0)
     phi_container = csdl.Variable(shape=(num_nodes, num_radial, num_azimuthal), value=0)
+    # local patch, 2026-09-15 (SPL rotor-optimisation, `local-patches.md`):
+    # same pattern as the BEM `sectional_lift_coefficient` patch
+    # (`compute_quantities_of_interest.py`, 2026-08-10) -- Cl already flows
+    # through this function (used to build Cx/Ct below) but was never
+    # attached to `RotorAnalysisOutputs`, so no stall/max_cl constraint was
+    # possible for a Pitt-Peters (oblique-flow/transition) point. No new
+    # computation, same csdl.Variable already in the graph.
+    Cl_container = csdl.Variable(shape=(num_nodes, num_radial, num_azimuthal), value=0)
 
 
     for i in range(num_nodes):
@@ -209,6 +217,7 @@ def solve_for_steady_state_inflow(
         dQ_container = dQ_container.set(csdl.slice[i, :, :], dQ)
         dD_container = dD_container.set(csdl.slice[i, :, :], dQ / radius_vec[i, :, :])
         phi_container = phi_container.set(csdl.slice[i, :, :], phi)
+        Cl_container = Cl_container.set(csdl.slice[i, :, :], Cl)
         thrust_container = thrust_container.set(csdl.slice[i], thrust)
         torque_container = torque_container.set(csdl.slice[i], torque)
         C_T_containter = C_T_containter.set(csdl.slice[i], C_T_new)
@@ -239,10 +248,7 @@ def solve_for_steady_state_inflow(
     outputs.normalized_axial_induced_flow = lambda_container
     outputs.inflow = inflow_container
     outputs.sectional_inflow_angle = phi_container
-
-
-    # outputs.Cl = Cl
-    # outputs.Cd = Cd
+    outputs.sectional_lift_coefficient = Cl_container   # local patch, 2026-09-15 (see above)
 
 
     # # print(state_vec.value)

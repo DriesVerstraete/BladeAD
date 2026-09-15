@@ -96,8 +96,12 @@ class RotorNSGA2Setup:
                                  f"objectives {[s.name for s in active_objectives(case)]}")
         self.obj_names = [s.name for s in self.objs]
         _ac = [s.name for s in self.objs if s.is_acoustic]
-        if any(s.result_key == "acoustics.hover_ospl_db" for s in self.objs):
-            raise ValueError("hover_noise is diagnostic-only and cannot be a scout objective")
+        # hover_noise was diagnostic-only (Gill-Lee out-of-envelope concern,
+        # `hover broadband acoustic model` HIGH PRIORITY item); PI settled the
+        # hover-noise track 2026-09-11/-14 -- `forward.evaluate` already always
+        # computes `out["hover_noise"]` when with_acoustics, so lifting this
+        # guard needs no other plumbing change. Values still come back physical
+        # (53-96 dB) on this FPP rotor class per the 2026-09-14 gen4 pushes.
         self.with_acoustics = bool(_ac)
         self.oei = any(s.result_key == "oei_thrust_margin" for s in self.objs)
 

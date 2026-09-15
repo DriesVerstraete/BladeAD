@@ -38,6 +38,7 @@ import csdl_alpha as csdl
 from BladeAD.utils.var_groups import RotorAnalysisInputs, RotorMeshParameters, AtmosStates
 from BladeAD.utils.parameterization import BsplineParameterization
 from BladeAD.core.BEM.bem_model import BEMModel
+from BladeAD.core.pitt_peters.pitt_peters_model import PittPetersModel
 from BladeAD.core.airfoil.composite_airfoil_model import CompositeAirfoilModel
 
 from BladeAD.core.airfoil.mach_corrected_bspline_airfoil_model import MachCorrectedBSplineAirfoilModel
@@ -226,6 +227,52 @@ def _bem_point(chord_profile, twist_profile, rpm_var, spec, op, airfoil_model,
     return inputs, out
 
 
+def _pitt_peters_point(chord_profile, twist_profile, rpm_var, spec, *, tilt_deg,
+                       airspeed_m_s, altitude_m, airfoil_model, norm_stations=None,
+                       num_azimuthal=8):
+    """One OBLIQUE-flow design point via `PittPetersModel` -- for transition
+    conditions (Shahjahan 2024 Table 6), where the rotor disk sits at a
+    nonzero angle to the freestream. Deliberately separate from `_bem_point`
+    (axial-only `BEMModel`, thrust_vector always [1,0,0]) rather than a shared
+    helper -- keeps every existing hover/cruise/OEI/acoustic call site
+    untouched. `twist_profile` already carries any pitch offset, same
+    convention as `_bem_point`.
+
+    Convention (PI, 2026-09-15): tilt 0 deg = cruise (thrust_vector along the
+    flight-speed axis, purely axial), 90 deg = hover (thrust_vector normal to
+    it, purely edgewise). `mesh_velocity` stays the flight speed along the
+    vehicle x-axis; `compute_local_frame_velocities` (shared preprocessing)
+    decomposes it into axial/in-plane components relative to the tilted
+    thrust_vector automatically -- verified in
+    `cases/shahjahan_case1_fpp_noise/transition_pitt_peters_smoke.py` +
+    `..._gradient_check.py` (AD vs FD agree to ~1e-6 relative).
+    """
+    tilt_rad = np.deg2rad(tilt_deg)
+    thrust_vector = csdl.Variable(value=np.array([np.cos(tilt_rad), 0.0, np.sin(tilt_rad)]))
+    thrust_origin = csdl.Variable(value=np.array([0.0, 0.0, 0.0]))
+    mesh = RotorMeshParameters(
+        thrust_vector=thrust_vector,
+        thrust_origin=thrust_origin,
+        chord_profile=chord_profile,
+        twist_profile=twist_profile,
+        radius=csdl.Variable(value=spec.radius),
+        num_radial=spec.num_radial,
+        num_azimuthal=num_azimuthal,
+        num_blades=spec.n_blades,
+        norm_hub_radius=spec.hub_radius / spec.radius,
+        norm_radial_stations=norm_stations,
+    )
+    inputs = RotorAnalysisInputs(
+        rpm=rpm_var,
+        mesh_velocity=csdl.Variable(value=np.array([[airspeed_m_s, 0.0, 0.0]])),
+        mesh_parameters=mesh,
+    )
+    inputs.atmos_states = _isa_atmos(altitude_m)
+    out = PittPetersModel(num_nodes=1, airfoil_model=airfoil_model,
+                          integration_scheme="trapezoidal").evaluate(inputs=inputs)
+    return inputs, out
+
+
 def _op(entry, thrust_scale=1.0):
     return OperatingPoint(altitude=entry["altitude_m"], airspeed=entry["airspeed_m_s"],
                           thrust=entry["thrust_n"] * thrust_scale)
@@ -364,6 +411,7 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         hover_pitch0 = np.deg2rad(float(_hp_seed))
         cruise_pitch0 = np.deg2rad(float(prev.get("cruise_pitch_deg", 0.0)))
         oei_rpm0 = float(prev.get("oei_rpm") or hover_rpm0)
+        transition_rpm0 = float(prev.get("transition_rpm") or cruise_rpm0)
     else:
         if seed_dict is None:
             raise SystemExit("no seed: case['seed'] is 'inverse-design' but no "
@@ -377,6 +425,7 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         hover_pitch0 = np.deg2rad(_hp_seed)
         cruise_pitch0 = np.deg2rad(seed_dict["cruise_pitch_deg"])
         oei_rpm0 = seed_dict.get("oei_rpm", seed_dict["hover_rpm"])
+        transition_rpm0 = seed_dict.get("transition_rpm", seed_dict["cruise_rpm"])
 
     pinned = pin_geometry_from is not None
     # OEI (one-engine-inoperative) hover thrust-margin slot -- Shahjahan 2024
@@ -390,6 +439,21 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
     oei_active = any(s.result_key == "oei_thrust_margin" for s in live)
     oei_max_cl = None
     oei_thrust = oei_torque = oei_torque_margin = oei_motor_eff = oei_thrust_margin = None
+
+    # Transition point (Shahjahan 2024 Table 6) -- OBLIQUE flow, PittPeters not
+    # BEMModel (`notes/2026-09-15-transition-point-scoping.md`). Additive/opt-in:
+    # `case["transition"]` absent for every case except one explicitly enabling
+    # it -- zero behaviour change elsewhere. FPP shares one collective across
+    # hover/cruise/OEI/transition (nothing to interpolate, unlike Shahjahan's own
+    # VPP); `transition_rpm` is the only new free variable, thrust an equality
+    # constraint (this is a real steady operating point, not an emergency
+    # margin like OEI) -- matches the hover/cruise convention.
+    transition_cfg = case.get("transition")
+    transition_active = transition_cfg is not None
+    transition_out = None
+    transition_thrust = transition_power = transition_torque = None
+    transition_motor_eff = transition_torque_margin = transition_electrical_power = None
+    transition_max_cl = None
 
     recorder = csdl.Recorder(inline=True)
     recorder.start()
@@ -419,6 +483,12 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         _oei_rpm_b = bounds.get("oei_rpm", bounds["hover_rpm"])
         oei_rpm = csdl.Variable(value=np.array([oei_rpm0]))
         oei_rpm.set_as_design_variable(lower=_oei_rpm_b[0], upper=_oei_rpm_b[1], scaler=1e-3)
+
+    if transition_active:
+        _transition_rpm_b = bounds.get("transition_rpm", bounds["cruise_rpm"])
+        transition_rpm = csdl.Variable(value=np.array([transition_rpm0]))
+        transition_rpm.set_as_design_variable(lower=_transition_rpm_b[0],
+                                              upper=_transition_rpm_b[1], scaler=1e-3)
 
     param = BsplineParameterization(num_radial=spec.num_radial, num_cp=spec.n_chord_cps,
                                     order=spec.bspline_order,
@@ -454,6 +524,17 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
             _, oei_out = _bem_point(chord_profile, twist_profile + hover_pitch, oei_rpm, spec,
                                     oei_op, airfoil_model, norm_stations=norm_stations,
                                     num_azimuthal=1, extra_mesh_fields=None)
+
+        if transition_active:
+            # FPP: transition reuses the SAME shared collective as hover/cruise
+            # (fixed_pitch=True) -- nothing to interpolate, unlike Shahjahan's VPP.
+            _, transition_out = _pitt_peters_point(
+                chord_profile, twist_profile + hover_pitch, transition_rpm, spec,
+                tilt_deg=float(transition_cfg["tilt_deg"]),
+                airspeed_m_s=float(transition_cfg["airspeed_m_s"]),
+                altitude_m=float(transition_cfg.get("altitude_m", cruise.altitude)),
+                airfoil_model=airfoil_model, norm_stations=norm_stations,
+                num_azimuthal=int(transition_cfg.get("num_azimuthal", 8)))
 
     acoustic_bundle = None
     if acoustics_active:
@@ -503,6 +584,26 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
     cruise_out.total_thrust.set_as_constraint(equals=cruise.thrust, scaler=1e-3)
     cruise_cl_con.set_as_constraint(upper=_cl_upper, scaler=1.0)
 
+    transition_cl_con = None
+    if transition_active:
+        _transition_thrust_target = float(transition_cfg["thrust_n"])
+        transition_out.total_thrust.set_as_constraint(equals=_transition_thrust_target, scaler=1e-3)
+        # KNOWN GAP (2026-09-15): `PittPetersModel` computes Cl internally but
+        # never attaches it to its outputs (`pitt_peters_inflow.py` has the
+        # line, commented out: `# outputs.Cl = Cl`) -- no stall/max_cl
+        # constraint possible for transition until that's exposed (a local
+        # BladeAD-core patch, not an `optimisation/`-only fix -- see
+        # `local-patches.md`). Flagged, not silently dropped: a transition
+        # point in a real optimization run WITHOUT this is unprotected against
+        # deep stall. `notes/2026-09-15-transition-point-scoping.md`.
+        if getattr(transition_out, "sectional_lift_coefficient", None) is not None:
+            transition_max_cl = csdl.maximum(transition_out.sectional_lift_coefficient)
+            transition_cl_con = transition_max_cl if _stall_margin is None else _stall_ratio(transition_out)
+            transition_cl_con.set_as_constraint(upper=_cl_upper, scaler=1.0)
+        else:
+            print("  !! transition: no stall/max_cl constraint -- PittPetersModel "
+                  "does not expose sectional_lift_coefficient (known gap)")
+
     # --- motor: shaft torque/speed -> electrical input power ---
     # step 1a is a PLACEBO (fixed efficiency); step 1b is the real McDonald
     # loss map for the paper-scaled EMRAX-188 (`mcdonald` / alias `emrax188`),
@@ -544,6 +645,25 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         if _min_oei_margin is not None:
             oei_thrust_margin.set_as_constraint(lower=float(_min_oei_margin), scaler=1.0)
 
+    if transition_active:
+        # Default overload k_hover (not k_cruise): the first proof point
+        # (Transition3, 45 deg/527.75 N) sits between cruise's 122 N and
+        # hover's 999 N thrust demand -- with k_cruise=1.0 the torque envelope
+        # failed by ~2% on a clean thrust-equality solve (2026-09-15). Matches
+        # Shahjahan's own finding that transition needs hover-like power
+        # margins. Override via `case["motor"]["k_transition"]` if a specific
+        # point needs something else.
+        transition_motor = evaluate_case_motor(
+            motor_cfg, transition_rpm, transition_out.total_power,
+            overload=motor_cfg.get("k_transition", motor_cfg.get("k_hover", 1.7)))
+        transition_torque, transition_motor_eff = transition_motor.torque, transition_motor.efficiency
+        transition_torque_margin = transition_motor.torque_margin
+        transition_electrical_power = transition_motor.electrical_power
+        transition_thrust = transition_out.total_thrust
+        transition_power = transition_out.total_power
+        if transition_torque_margin is not None:
+            transition_torque_margin.set_as_constraint(upper=1.0, scaler=1.0)
+
     # the physical result quantities each objective slot can name
     result_vars = {
         "figure_of_merit": hover_out.figure_of_merit,
@@ -555,6 +675,9 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
     }
     if oei_thrust_margin is not None:
         result_vars["oei_thrust_margin"] = oei_thrust_margin
+    if transition_electrical_power is not None:
+        result_vars["transition_electrical_power"] = transition_electrical_power
+        result_vars["transition_power"] = transition_power
     if acoustic_bundle is not None:
         result_vars["acoustics.hover_ospl_db"] = acoustic_bundle.hover_ospl
         result_vars["acoustics.cruise_vehicle_ospl_db"] = acoustic_bundle.cruise_vehicle_ospl
@@ -663,6 +786,14 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         _mom = constraints.get("min_oei_thrust_margin")
         if _mom is not None:
             checks["oei thrust margin >= floor"] = float(oei_thrust_margin.value[0]) >= float(_mom) - 1e-4
+    if transition_active:
+        checks["transition thrust matches target"] = (
+            abs(transition_out.total_thrust.value[0] - float(transition_cfg["thrust_n"])) < tol)
+        if transition_cl_con is not None:
+            checks["transition max_cl <= limit"] = float(transition_cl_con.value[0]) <= _cl_upper + 1e-3
+        if transition_torque_margin is not None:
+            checks["transition motor torque within envelope"] = (
+                float(transition_torque_margin.value[0]) <= 1.0 + 1e-3)
     acoustics = None
     if acoustic_bundle is not None:
         def _s(v):
@@ -699,6 +830,10 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
         "hover_electrical_power": float(hover_electrical_power.value[0]),
         "oei_thrust_margin": (float(oei_thrust_margin.value[0])
                               if oei_thrust_margin is not None else float("nan")),
+        "transition_electrical_power": (float(transition_electrical_power.value[0])
+                                        if transition_electrical_power is not None else float("nan")),
+        "transition_power": (float(transition_power.value[0])
+                             if transition_power is not None else float("nan")),
         "acoustics": acoustics,
     }
     objective_values = {}
@@ -763,6 +898,21 @@ def run(case, out_dir, seed_dict, specs=None, epsilons=None, optimize=None,
                               if oei_torque_margin is not None else None),
         "oei_motor_efficiency": (float(oei_motor_eff.value[0])
                                  if hasattr(oei_motor_eff, "value") else oei_motor_eff),
+        "transition_rpm": (float(transition_rpm.value[0]) if transition_active else None),
+        "transition_tilt_deg": (float(transition_cfg["tilt_deg"]) if transition_active else None),
+        "transition_airspeed_m_s": (float(transition_cfg["airspeed_m_s"]) if transition_active else None),
+        "transition_thrust": (float(transition_thrust.value[0]) if transition_thrust is not None else None),
+        "transition_thrust_target": (float(transition_cfg["thrust_n"]) if transition_active else None),
+        "transition_power": (float(transition_power.value[0]) if transition_power is not None else None),
+        "transition_electrical_power": (float(transition_electrical_power.value[0])
+                                        if transition_electrical_power is not None else None),
+        "transition_torque_nm": (float(transition_torque.value[0]) if transition_torque is not None else None),
+        "transition_torque_margin": (float(transition_torque_margin.value[0])
+                                     if transition_torque_margin is not None else None),
+        "transition_motor_efficiency": (float(transition_motor_eff.value[0])
+                                        if hasattr(transition_motor_eff, "value") else transition_motor_eff),
+        "transition_max_sectional_cl": (float(transition_max_cl.value[0])
+                                        if transition_max_cl is not None else None),
         "taper": float(taper.value[0]),
         "twist_washout_deg": float(np.rad2deg(twist_washout.value[0])),
         "hover_max_sectional_cl": float(hover_max_cl.value[0]),
